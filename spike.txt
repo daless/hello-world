@@ -1,0 +1,658 @@
+
+# spike project for Steve for Anthem NY
+
+# post 4 months OC 18 - Jan 19
+# pre  3 month jul 18 - sep 18
+
+setwd("~/anthem")
+# from the excellus models
+
+library(RODBC)
+library(sqldf)
+library(dplyr)
+library(comorbidity)
+library(lubridate)
+library(formattable)
+library(sparkline)
+library(lubridate)
+library(h2o)
+h2o.init()
+#h2o.shutdown(prompt  = FALSE)
+
+#Empire restricted
+conn=odbcDriverConnect('DRIVER={ODBCSQLSvr};SERVER=dbswp0624.aimhealth.com;DATABASE=RACER00944;UID=COBUnixToSQL;PWD=COBUn!xT0Sql')
+
+
+
+# find maximum feed id
+
+feed_id_range <- sqlQuery(
+  conn,
+  " select max(FEED_ID) as max_feed_id from dbo.FEED as p
+  where p.PROJECT_ID = 944
+  and FEED_ID != 999"
+)
+
+# range of feed ids - use 3 for hx data most recent feed use to score
+
+
+feed_id_range$low_feed = feed_id_range$max_feed_id - 4
+feed_id_range$high_feed = feed_id_range$max_feed_id - 1
+
+
+# feed ids were hard coded there are bogus feed ids in the data
+# exlude ambulance POS
+
+claim1 <- sqlQuery(
+  conn,
+  " select
+  DISTINCT CLM.CLAIM_ID,
+  CLM.CLAIM_NO,
+  CLM.FEED_ID,
+  CLM.PROJECT_ID,
+  CLM.PATIENT_ID,
+  CLM.PATIENT_AGE,
+  CLM.PATIENT_DOB,
+  CLM.PATIENT_GENDER,
+  CLM.DATE_OF_SERVICE_BEG,
+  CLM.DATE_OF_SERVICE_END,
+  CLM.DATE_ADMITTED,
+  CLM.DATE_DISCHARGED,
+  CLM.SUBSCRIBER_ID,
+  CLM.SUBSCRIBER_AGE,
+  CLM.SUBSCRIBER_DOB,
+  CLM.BILL_TYPE,
+  CLM.AMT_BILLED,
+  CLM.AMT_ALLOWED,
+  CLM.AMT_COPAY,
+  CLM.AMT_DEDUCTIBLE,
+  CLM.AMT_COINSURANCE,
+  CLM.AMT_DISALLOWED,
+  CLM.AMT_COB_PAID,
+  CLM.AMT_DISCOUNT,
+  CLM.AMT_COVERED,
+  CLM.AMT_NOT_COVERED,
+  CLM.AMT_PAID,
+  CLM.DATE_PAID,
+  CLM.ADJ_CLAIM_FLAG,
+  CLM.PRINCIPAL_DIAG as Principal_Dx,
+  CLM.PLACE_OF_SERVICE,
+  CLM.SUBSCRIBER_DOB AS SUBSCRB_DOB,
+  CLM.ROWID,
+  CLM.INS_GROUP_ID,
+  CLM.GROUP_SIZE,
+  CLM.PRODUCT_LINE_ID,
+  CLM.LINE_OF_BUSINESS_ID,
+  CLM.DATE_CREATED AS CLM_DATE_CREATED,
+  CLM.DATE_UPDATED AS CLM_DATE_UPDATED,
+  CLM.PROVIDER_ID
+  FROM dbo.CLAIM CLM
+  where  CLM.PROJECT_ID = 944
+  AND CLM.SERVICE_ID = 2
+  AND CLM.AMT_PAID > 0
+  and CLM.PLACE_OF_SERVICE != 41
+  and CLM.PLACE_OF_SERVICE != 42
+  AND CLM.DATE_OF_SERVICE_BEG >= '07-01-2018'
+  AND  CLM.DATE_OF_SERVICE_END <= '01-31-2019'"
+)
+
+
+
+
+
+# v3 added PLACE_OF_SERVICE
+
+clm_id <- sqldf("select distinct CLAIM_ID , PROVIDER_ID, PLACE_OF_SERVICE, PATIENT_ID, DATE_OF_SERVICE_END from claim1")
+
+
+
+icd1  <- sqlQuery(
+  conn,
+  " select
+  DISTINCT CLM.CLAIM_ID,
+  DX.ICD9_CODE,
+  DX.PROJECT_ID,
+  DX.ICD9_TYPE,
+  DX.ADMITTING_CODE,
+  DX.PRINCIPAL_CODE,
+  DX.ORDER_IN_CLAIM,
+  DX.CLAIM_LINE_ID,
+  DX.FEED_ID,
+  CLM.PROVIDER_ID
+  FROM dbo.CLAIM CLM
+  INNER JOIN dbo.ICD9 DX
+  ON CLM.CLAIM_ID = DX.CLAIM_ID
+  WHERE CLM.PROJECT_ID = 944
+  AND CLM.DATE_OF_SERVICE_BEG >= '07-01-2018'
+  AND  CLM.DATE_OF_SERVICE_END <= '01-31-2019'"
+)
+
+
+#dx_fields <- sqlColumns(
+#  conn, "dbo.ICD9"  )
+
+
+# remove decimals
+icd1$ICD9_CODE <- gsub(".","",icd1$ICD9_CODE, fixed = TRUE)
+
+
+icd1 <- sqldf("select i.* from icd1 i,clm_id c where i.CLAIM_ID = c.CLAIM_ID  order by CLAIM_ID ")
+
+
+
+
+proc1 <-
+  sqlQuery(
+    conn,
+    "Select * from dbo.CLAIM_LINE
+    where PROJECT_ID = 944
+    and  DATE_OF_SERVICE_END >= '07-01-2018'
+    AND DATE_OF_SERVICE_END <= '01-31-2019'")
+
+
+
+# claimline_fields <- sqlColumns(
+#   conn, "dbo.CLAIM_LINE"  )
+
+
+
+proc1 <- sqldf("select i.*, c.PROVIDER_ID, c.PATIENT_ID from proc1 i,clm_id c where i.CLAIM_ID = c.CLAIM_ID  order by CLAIM_ID ")
+
+
+
+# build baseline 3 month data
+
+
+proc_base_id <-
+  sqlQuery(
+    conn,
+    "Select distinct CLAIM_ID from dbo.CLAIM_LINE
+    where PROJECT_ID = 944
+    AND DATE_OF_SERVICE_END >= '07-01-2018'
+    AND DATE_OF_SERVICE_END <= '09-30-2018'")
+
+
+proc_base <- sqldf("select p.* from proc1 p, proc_base_id i
+                   where i.CLAIM_ID = p.CLAIM_ID")
+
+
+
+proc_base$DATE_OF_SERVICE_END <- as.character(proc_base$DATE_OF_SERVICE_END)
+
+proc_base <- sqldf( "select * from proc_base where  DATE_OF_SERVICE_END >= '2018-07-01'
+                     AND DATE_OF_SERVICE_END <= '2018-09-30'")
+
+
+
+# by claim line
+
+proc_std <- sqldf("select CLAIM_ID, count(LINE_NO) as cnt_number_lines, count(CPT_MODIFIER) as cnt_modifiers,
+                  SUM(AMT_BILLED) as tot_billed
+                  from proc_base group by CLAIM_ID")
+
+# get provider number
+proc_std2 <- sqldf ("select distinct c.*, p.cnt_number_lines, p.cnt_modifiers, p.tot_billed 
+                    from clm_id c, proc_std p
+                    where c.CLAIM_ID = p.CLAIM_ID")
+
+proc_std_prov <- sqldf("select PROVIDER_ID, sum(cnt_number_lines) as total_lines, sum(cnt_modifiers) as total_modifiers,
+                       SUM(tot_billed) as tot_billed, count(PATIENT_ID) as cnt_members
+                       from proc_std2 group by PROVIDER_ID")
+
+# pre counts per member
+
+pre_by_member <- proc_std_prov
+pre_by_member$total_lines <- pre_by_member$total_lines /  pre_by_member$cnt_members
+pre_by_member$total_modifiers <- pre_by_member$total_modifiers /  pre_by_member$cnt_members
+pre_by_member$tot_billed <- pre_by_member$tot_billed /  pre_by_member$cnt_members
+pre_by_member$month_number <- -1
+
+
+# calc stdv
+proc_std3 <- proc_std2 %>%
+  group_by(PROVIDER_ID) %>%
+  summarise(std_number_lines = sd(cnt_number_lines),
+            std_modifiers = sd(cnt_modifiers),
+            std_tot_billed = sd(tot_billed))
+
+# by provider billed by claim line
+proc_std3_t <- proc_base %>%
+  group_by(PROVIDER_ID) %>%
+  summarise(std_tot_billed_by_line = sd(AMT_BILLED))
+
+proc_std3 <- sqldf("select p.*, c.std_tot_billed_by_line from proc_std3 p, proc_std3_t c
+                   where p.PROVIDER_ID = c.PROVIDER_ID")
+
+
+# calc 3 stdv
+proc_std3 <- proc_std3 %>%
+  mutate(std_number_lines_x3 = std_number_lines * 3,
+         std_modifiers_x3 = std_modifiers *3,
+         std_tot_billed_x3 = std_tot_billed *3,
+         std_tot_billed_by_line_x3 = std_tot_billed_by_line * 3)
+
+
+# study period
+
+proc_study_id <- sqlQuery(
+  conn,
+  "Select distinct CLAIM_ID from dbo.CLAIM_LINE
+  where PROJECT_ID = 944
+  AND DATE_OF_SERVICE_END >= '2018-10-01'
+  AND DATE_OF_SERVICE_END <= '2019-01-31'")
+
+
+proc_study <- sqldf("select p.* from proc1 p, proc_study_id i
+                    where i.CLAIM_ID = p.CLAIM_ID")
+
+proc_study$DATE_OF_SERVICE_END <- as.character(proc_study$DATE_OF_SERVICE_END)
+
+proc_study <- sqldf( "select * from proc_study where  DATE_OF_SERVICE_END >= '2018-10-01'
+               AND DATE_OF_SERVICE_END <= '2019-01-31'")
+
+
+proc_std_study <- sqldf("select CLAIM_ID, count(LINE_NO) as cnt_number_lines_study,
+                        count(CPT_MODIFIER) as cnt_modifiers_study,
+                        SUM(AMT_BILLED) as tot_billed_study
+                        from proc_study group by CLAIM_ID")
+
+# get provider number
+proc_std2_study <- sqldf ("select distinct c.*, p.cnt_number_lines_study, p.cnt_modifiers_study, p.tot_billed_study 
+                          from clm_id c, proc_std_study p
+                          where c.CLAIM_ID = p.CLAIM_ID")
+
+
+
+# post by month pivots
+proc_study2 <- proc_study
+proc_study2$DOS_end <- floor_date(as.Date(proc_study2$DATE_OF_SERVICE_END, unit = "month"))
+date_fence <- as.Date(min(proc_study2$DOS_end))
+
+
+# number of months after study start date
+proc_study2$month_number <- round(((date_fence) -
+                                      as.Date(proc_study2$DATE_OF_SERVICE_END))/(365.25/12)) * -1
+
+
+# need method = "name__class" becuase used date diff to calcualte date differecnes sqldf errors ut unles have this
+
+proc_std_prov_post <- sqldf("select CLAIM_ID, PROVIDER_ID, month_number, PATIENT_ID,
+count(LINE_NO) as cnt_number_lines, count(CPT_MODIFIER) as cnt_modifiers,
+                  SUM(AMT_BILLED) as tot_billed
+                  from proc_study2 group by CLAIM_ID", method = "name__class")
+
+
+proc_std_prov_post2 <- sqldf("select  PROVIDER_ID, month_number, 
+sum(cnt_number_lines) as cnt_number_lines_mnth, sum(cnt_modifiers) as cnt_modifiers_mnth,
+                            SUM(tot_billed) as tot_billed_mnth, count(PATIENT_ID) as cnt_members_mnth
+                            from proc_std_prov_post group by PROVIDER_ID, month_number", method = "name__class")
+
+# post counts per member
+
+post_by_member <- proc_std_prov_post2
+post_by_member$total_lines <- post_by_member$cnt_number_lines_mnth /  post_by_member$cnt_members_mnth
+post_by_member$total_modifiers <- post_by_member$cnt_modifiers_mnth /  post_by_member$cnt_members_mnth
+post_by_member$tot_billed <- post_by_member$tot_billed_mnth /  post_by_member$cnt_members_mnth
+
+
+# build table for slopes
+
+
+
+slope1 <- sqldf("select PROVIDER_ID, total_lines as total_lines_00, total_modifiers as total_modifiers_00,
+                 tot_billed as tot_billed_00, cnt_members as cnt_members_00
+                 from pre_by_member")
+
+slope2 <- sqldf("select s.*, p.total_lines as total_lines_0, p.total_modifiers as total_modifiers_0,
+                p.tot_billed as tot_billed_0, cnt_members_mnth as cnt_members_mnth_0
+                from slope1 s left join post_by_member p
+                on s.PROVIDER_ID = p.PROVIDER_ID
+                and p.month_number = 0", method = "name__class")
+slope3 <- sqldf("select s.*, p.total_lines as total_lines_1, p.total_modifiers as total_modifiers_1,
+                p.tot_billed as tot_billed_1, cnt_members_mnth as cnt_members_mnth_1
+                from slope2 s left join post_by_member p
+                on s.PROVIDER_ID = p.PROVIDER_ID
+                and p.month_number = 1", method = "name__class")
+
+slope4 <- sqldf("select s.*, p.total_lines as total_lines_2, p.total_modifiers as total_modifiers_2,
+                p.tot_billed as tot_billed_2, cnt_members_mnth as cnt_members_mnth_2
+                from slope3 s left join post_by_member p
+                on s.PROVIDER_ID = p.PROVIDER_ID
+                and p.month_number = 2", method = "name__class")
+
+slope5 <- sqldf("select s.*, p.total_lines as total_lines_3, p.total_modifiers as total_modifiers_3,
+                p.tot_billed as tot_billed_3, cnt_members_mnth as cnt_members_mnth_3
+                from slope4 s left join post_by_member p
+                on s.PROVIDER_ID = p.PROVIDER_ID
+                and p.month_number = 3", method = "name__class")
+slope6 <- sqldf("select s.*, p.total_lines as total_lines_4, p.total_modifiers as total_modifiers_4,
+                p.tot_billed as tot_billed_4, cnt_members_mnth as cnt_members_mnth_4
+                from slope5 s left join post_by_member p
+                on s.PROVIDER_ID = p.PROVIDER_ID
+                and p.month_number = 4", method = "name__class")
+
+slope6[is.na(slope6)] <-0
+
+
+
+slope <- function(x){
+  if(all(is.na(x)))
+    return(NA)
+  else 
+    return(coef(lm(I(1:6)~x))[2])
+}
+
+slope6$slope_lines <-
+  apply(slope6[,c('total_lines_00',  'total_lines_0',  'total_lines_1',  'total_lines_2',  'total_lines_3',  'total_lines_4')],
+        1,
+        slope)
+
+slope6$slope_modifiers <-
+  apply(slope6[,c('total_modifiers_00', 'total_modifiers_0', 'total_modifiers_1', 'total_modifiers_2', 
+'total_modifiers_3', 'total_modifiers_4')],
+        1,
+        slope)
+
+slope6$slope_billed <-
+  apply(slope6[,c('tot_billed_00', 'tot_billed_0', 'tot_billed_1', 'tot_billed_2', 'tot_billed_3', 'tot_billed_4')],
+        1,
+        slope)
+
+slope6$slope_members <-
+  apply(slope6[,c('cnt_members_00', 'cnt_members_mnth_0', 'cnt_members_mnth_1', 'cnt_members_mnth_2', 'cnt_members_mnth_3',
+'cnt_members_mnth_4')],
+        1,
+        slope)
+
+
+
+# decile slopes
+slope6 <- mutate(slope6, 
+                 slope_lines_rank = ntile(slope6$slope_lines, 10))
+slope6 <- mutate(slope6, 
+                 slope_modifiers_rank = ntile(slope6$slope_modifiers, 10))
+slope6 <- mutate(slope6, 
+                 slope_billed_rank = ntile(slope6$slope_billed, 10))
+slope6 <- mutate(slope6, 
+                 slope_members_rank = ntile(slope6$slope_members, 10))
+slope6[is.na(slope6)] <-0
+
+
+
+# reorder columns
+slope7 <- sqldf("select PROVIDER_ID, total_lines_00,  total_lines_0,  total_lines_1,  total_lines_2,
+total_lines_3,  total_lines_4, slope_lines, slope_lines_rank,
+                total_modifiers_00, total_modifiers_0, total_modifiers_1, total_modifiers_2, total_modifiers_3,
+total_modifiers_4,slope_modifiers,slope_modifiers_rank,
+                tot_billed_00, tot_billed_0, tot_billed_1, tot_billed_2, tot_billed_3, tot_billed_4,slope_billed,slope_billed_rank,
+                cnt_members_00, cnt_members_mnth_0, cnt_members_mnth_1, cnt_members_mnth_2, 
+cnt_members_mnth_3, cnt_members_mnth_4, slope_members, slope_members_rank
+                from slope6")
+
+
+# calc max per provider for study period
+
+proc_std3_study <- proc_std2_study %>%
+  group_by(PROVIDER_ID) %>%
+  summarise(median_number_lines = median(cnt_number_lines_study),
+            median_modifiers = median(cnt_modifiers_study),
+            median_tot_billed = median(tot_billed_study))
+
+
+
+proc_std3_study_t <- proc_study %>%
+  group_by(PROVIDER_ID) %>%
+  summarise(median_tot_billed_by_line = median((AMT_BILLED)))
+
+
+proc_std3_study <- sqldf("select p.*, c.median_tot_billed_by_line from proc_std3_study p, proc_std3_study_t c
+                         where p.PROVIDER_ID = c.PROVIDER_ID")
+
+
+proc_comapre1 <- sqldf("select b.PROVIDER_ID,
+                       b.std_number_lines_x3, s.median_number_lines,
+                       b.std_modifiers_x3 , s.median_modifiers,
+                       b.std_tot_billed_x3 , s.median_tot_billed,
+                       b.std_tot_billed_by_line_x3, s.median_tot_billed_by_line
+                       from proc_std3 b, proc_std3_study s
+                       where b.PROVIDER_ID = s.PROVIDER_ID")
+
+lines_spike <- sqldf("select PROVIDER_ID,
+                     std_number_lines_x3, median_number_lines, (median_number_lines - std_number_lines_x3) as line_spike
+                     from proc_comapre1
+                     where median_number_lines > std_number_lines_x3 and std_number_lines_x3 > 0
+                     order by line_spike DESC")
+
+modifiers_spike <- sqldf("select PROVIDER_ID,
+                         std_modifiers_x3, median_modifiers, (median_modifiers - std_modifiers_x3) as modifier_spike
+                         from proc_comapre1
+                         where median_modifiers > std_modifiers_x3 and std_modifiers_x3 > 0
+                         order by modifier_spike DESC")
+
+billed_spike <- sqldf("select PROVIDER_ID,
+                      std_tot_billed_x3, median_tot_billed, (median_tot_billed - std_tot_billed_x3) as billed_spike
+                      from proc_comapre1
+                      where median_tot_billed > std_tot_billed_x3 and std_tot_billed_x3 > 0
+                      order by billed_spike DESC")
+
+line_billed_spike <- sqldf("select PROVIDER_ID,
+                           std_tot_billed_by_line_x3, median_tot_billed_by_line, (median_tot_billed_by_line - std_tot_billed_by_line_x3) as line_billed_spiked
+                           from proc_comapre1
+                           where median_tot_billed_by_line > std_tot_billed_by_line_x3 and std_tot_billed_by_line_x3 > 0
+                           order by line_billed_spiked DESC")
+
+
+
+
+
+
+# ??? add MUE file for CPT
+
+
+
+
+
+
+
+
+########################################
+
+# anomaly detection
+
+proc_std2$DATE_OF_SERVICE_END <- NULL
+proc_std2$PATIENT_ID <- NULL
+
+anom_base1 <- proc_std2
+anom_base1$pre_post <- "PRE"
+
+
+anom_base_std <- sqldf("select s.CLAIM_ID, s.PROVIDER_ID,s.PLACE_OF_SERVICE, s.cnt_number_lines_study as cnt_number_lines,
+                       s.cnt_modifiers_study as cnt_modifiers, s.tot_billed_study as tot_billed
+                       from  proc_std2_study s
+                       ")
+
+anom_base_std$pre_post <- "POST"
+
+anom_base1 <- rbind(anom_base1 , anom_base_std)
+
+
+
+an_id <- sqldf("select distinct CLAIM_ID from anom_base1")
+
+
+an_icd <- sqldf("select i.* from icd1 i,an_id c where i.CLAIM_ID = c.CLAIM_ID")
+
+
+an_icd$ICD10_CODE<-an_icd$ICD9_CODE
+#remove decimal points in the Dx codes
+an_icd$ICD9_CODE<-as.character(an_icd$ICD9_CODE)
+an_icd$ICD9_CODE<-gsub(".","",an_icd$ICD9_CODE,fixed=TRUE)
+an_icd <- sqldf("select distinct * from an_icd where ICD9_TYPE='DIAG10'")
+
+elixhauser_scores <- comorbidity(x=an_icd , id = "CLAIM_ID",  code = "ICD9_CODE", icd = "icd10", 
+                                 score = "elixhauser")
+
+elixhauser_scores_anom <- comorbidity(x=an_icd , id = "CLAIM_ID",
+                                      code = "ICD10_CODE", icd = "icd10", tidy.codes = TRUE,
+                                      parallel = FALSE,mc.cores = 4, score = "elixhauser")
+
+elixhauser_scores_anom$CLAIM_IDx <-elixhauser_scores_anom$CLAIM_ID 
+
+anom_base2 <- sqldf("select a.*, e.* from  anom_base1 a, elixhauser_scores_anom e 
+                    where a.CLAIM_ID = e.CLAIM_IDx")
+
+anom_base2$CLAIM_ID <- NULL
+anom_base2$CLAIM_ID <- anom_base2$CLAIM_IDx
+anom_base2$CLAIM_IDx <- NULL
+
+write.table(anom_base2, file = "anom_base2.csv",
+            row.names = FALSE, sep ="\t")
+# 
+# anom_base2 <- read.csv("anom_base2.csv",header=TRUE, sep="\t")
+
+
+anom_base2$windex <- NULL
+anom_base2$index <- NULL
+anom_base2$wscore <- NULL
+
+
+# add place of service
+
+#anom_base2 <- sqldf("select i.PLACE_OF_SERVICE, p.* from anom_base2 p, clm_id i
+#             where p.CLAIM_ID= i.CLAIM_ID ")
+
+anom_base2$PLACE_OF_SERVICE <- as.factor(as.character(anom_base2$PLACE_OF_SERVICE))
+
+anom_base_pre <- sqldf("select * from anom_base2 where pre_post = 'PRE'")
+anom_base_post <- sqldf("select * from anom_base2 where pre_post = 'POST'")
+
+anom_base_pre$pre_post <-NULL
+anom_base_post$pre_post <-NULL
+
+anom_base_pre$CLAIM_ID <- NULL
+anom_base_pre$PROVIDER_ID <- NULL
+#anom_base_pre$CLAIM_ID.1 <- NULL
+anom_base_pre$score <- NULL
+anom_base_post$CLAIM_ID <- NULL
+anom_base_post$PROVIDER_ID <- NULL
+#anom_base_post$CLAIM_ID.1 <- NULL
+anom_base_post$score <- NULL
+
+
+anom_base_pre_h2o <- as.h2o(anom_base_pre) 
+anom_base_post_h2o <- as.h2o(anom_base_post) 
+
+
+p4_dl <- h2o.deeplearning(x = 1:35, training_frame = anom_base_pre_h2o, autoencoder = TRUE, 
+                          hidden = c(35,10,35), epochs = 100, stopping_tolerance = 1e-4, activation = "Tanh",
+                          categorical_encoding = "AUTO")
+
+
+p4_anon = h2o.anomaly(p4_dl,anom_base_post_h2o)
+head(p4_anon)
+
+p4_anon_df <- as.data.frame(p4_anon)
+plot(sort(p4_anon_df$Reconstruction.MSE), main='Anomalies')
+
+
+# reconstruct post for prvodier id
+anom_base_post <- sqldf("select * from anom_base2 where pre_post = 'POST'")
+p4_anon_df2 <- cbind(p4_anon_df,anom_base_post)
+
+
+# anaomalies are 3 standard deviations above mean MSE
+
+all_prov_stdv<- p4_anon_df2 %>%
+  summarise(std_Reconstruction.MSE = sd(Reconstruction.MSE))
+
+
+p4_anon_df3 <- cbind(p4_anon_df2,all_prov_stdv)
+
+p4_anon_df4 <-   filter(p4_anon_df3, Reconstruction.MSE > std_Reconstruction.MSE)
+
+
+oldnames <- c("chf","carit","valv","pcd","pvd","hypunc","hypc","para","ond","cpd","diabunc",
+              "diabc","hypothy","rf","ld","pud","aids","lymph","metacanc","solidtum","rheumd","coag",
+              "obes","wloss","fed","blane","dane","alcohol","drug","psycho","depre")
+
+newnames <- c("congestive_heart_failure","cardiac_arrhythmias","valvular_disease",
+              "pulmonary_circulation_disorders","peripheral_vascular_disorders",
+              "hypertension_uncomplicated","hypertension,_complicated","paralysis",
+              "neurological_disorders","chronic_pulmonary_disease","diabetes_uncomplicated",
+              "diabetes_complicated","hypothyroidism","renal_failure","liver_disease",
+              "peptic_ulcer_disease_excluding_bleeding","AIDS_HIV","lymphoma",
+              "metastatic_cancer","solid_tumour,without_metastasis",
+              "rheumatoid_arthritiscollaged_vascular_disease","coagulopathy",
+              "obesity","weight_loss","luid_and_electrolyte_disorders",
+              "blood_loss_anaemia","_deficiency_anaemia","alcohol_abuse","drug_abuse",
+              "psychoses","depression")
+
+
+# rename elixhouser diseases
+p4_anon_df4 <- p4_anon_df4 %>% rename_at(vars(oldnames), ~ newnames)
+
+p4_anon_df4$CLAIM_ID.1  <- NULL
+
+
+POS_lookup <- read.csv("POS_lookup.txt",header=TRUE, sep="\t")
+
+
+p4_anon_df4 <- sqldf("select distinct p.POS_desc,  a.* from p4_anon_df4 a LEFT JOIN POS_lookup p
+                     ON a.PLACE_OF_SERVICE = p.POS ")
+
+# sort by MSE
+p4_anon_df4 <- arrange(p4_anon_df4, desc(Reconstruction.MSE))
+
+p4_anon_df4$Anomaly_Score <- p4_anon_df4$Reconstruction.MSE
+p4_anon_df4$Reconstruction.MSE <- NULL
+p4_anon_df4$pre_post <- NULL
+
+
+p4_anon_df4 <- sqldf("select p.*, c.CLAIM_NO, c.DATE_OF_SERVICE_BEG,
+                     c.DATE_OF_SERVICE_END,C.AMT_PAID
+                     from p4_anon_df4 p, claim1 c
+                     where p.CLAIM_ID = c.CLAIM_ID")
+
+# calcualte deciles
+p4_anon_df4 <- mutate(p4_anon_df4, 
+                              anomaly_rank = ntile(p4_anon_df4$Anomaly_Score, 10))
+
+
+p4_anon_df5 <- sqldf ("select * from p4_anon_df4 where anomaly_rank = 10 and AMT_PAID >= 800")
+
+
+proc_detail <- sqldf ("select p.CLAIM_ID,a.CLAIM_NO,  p.CPT, p.CPT_MODIFIER from proc_base p,p4_anon_df5   a
+                      where a.CLAIM_ID = p.CLAIM_ID
+                      order by CLAIM_NO")
+
+icd_detail <- sqldf("select i.CLAIM_ID, a.CLAIM_NO, i.ICD9_CODE as ICD10_CODE from icd1 i, p4_anon_df5   a
+                    where i.CLAIM_ID = a.CLAIM_ID
+                    order by CLAIM_NO")
+
+
+ write.table(p4_anon_df5 , file = "anomaly_model_5_16.csv",
+             row.names = FALSE, sep =",")
+ 
+ write.table(proc_detail , file = "procedure_detail_5_16.csv",
+             row.names = FALSE, sep =",")
+
+ write.table(icd_detail  , file = "icd_detail_5_16.csv",
+             row.names = FALSE, sep =",")
+ 
+ write.table(slope7  , file = "trending_5_16.csv",
+             row.names = FALSE, sep =",")
+ 
+ 
+ 
+ # slope formattable sparklines report
+ 
+ 
+ spark_line <- sqldf("select PROVIDER_ID,  slope_lines, slope_lines_rank, total_lines_00,  total_lines_0,  total_lines_1,  total_lines_2,
+total_lines_3,  total_lines_4 from slope7 order by slope_lines desc")
+ 
+ 
+ library(formattable)
+ library(sparkline)
+ 
+ 
+ 

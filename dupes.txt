@@ -1,0 +1,874 @@
+
+# V 6 caseid 30
+
+setwd("~/aetna")
+
+
+
+
+library(sqldf)
+library(dplyr)
+library(comorbidity)
+library(dummies)
+#library(tcltk)
+library(DMwR)
+
+library(data.table)
+library(discretization)
+library(ggplot2)
+library(dataMaid)
+library(e1071)
+
+library(lubridate)
+library(caret)
+library(klaR)
+
+library(broom)
+library(factoextra)
+library(reshape2)
+library(plyr)
+
+library(MASS)
+library(tidyr)
+library(readr)
+library(RecordLinkage)
+
+
+#library(dbplyr)
+#library(sparklyr)
+
+
+#sc <- spark_connect(master = "local", version = "2.2.1")
+#spark_disconnect(sc)
+
+# sparkling water package
+#library(rsparkling)
+
+#library(h2o)
+#h2o.init()
+#library(h2oEnsemble)
+
+#h2o.shutdown(prompt  = FALSE)
+
+
+library(RODBC)
+
+
+conn = odbcDriverConnect(
+  'DRIVER={ODBCSQLSvr};SERVER=dbswp0625.aimhealth.com;DATABASE=RACERRESEARCH;UID=COBUnixToSQL;PWD=COBUn!xT0Sql'
+)
+
+# pin7 is a modified provider id
+
+options(scipen = 999)
+
+all_fileds <- sqlQuery( conn, 
+                        "SELECT  * 
+                        FROM dbo.AetnaDuplicateResearch " , max=500)
+
+
+
+str(all_fileds, list.len=ncol(all_fileds))
+
+
+cl_dup1  <- sqlQuery( conn, 
+                  "SELECT  ROWID ,CLAIM_NO, Account ,Business_Line ,CL_AMT_ALLOWED ,CL_AMT_BILLED ,
+                  CL_AMT_PAID ,CL_DATE_OF_SERVICE_BEG ,CL_DATE_OF_SERVICE_END ,
+                  CL_DATE_PAID ,CLAIM_SUFFIX ,
+                  Claims_Status ,Coinsurance_Amt ,Copay_Amt ,CPT ,Deductible_Amt ,DIAGNOSIS_1 ,
+                  DIAGNOSIS_10 ,DIAGNOSIS_11 ,DIAGNOSIS_2 ,DIAGNOSIS_3 ,DIAGNOSIS_4 ,DIAGNOSIS_5 ,
+                  DIAGNOSIS_6 ,DIAGNOSIS_7 ,DIAGNOSIS_8 ,DIAGNOSIS_9 ,
+                  Line_Of_Business ,Other_Ins_Paid_Amt ,
+                  PAT_MEMBER_NO ,PIN7 ,Place_Of_Service ,PRINCIPAL_DIAG ,Procedure_Code ,
+                  PROCEDURE_CODE_2 ,PROVIDER_NO ,REVENUE_CODE ,Suffix ,TAX_ID ,Type_Of_Service,IS_ADJUSTED,L_MDFR1_CD ,
+L_MDFR2_CD , L_MDFR3_CD ,l_units,source,claim_type
+                  FROM dbo.AetnaDuplicateResearch " )
+
+
+
+# member counts by source
+
+mem1 <- sqldf("select distinct PAT_MEMBER_NO,source from cl_dup1")
+mem2 <- sqldf("select source, count(source) as cnt from mem1 group by source" )
+
+
+
+# remove duplicate row ids
+#cl_dup1 <- cl_dup1 %>% dplyr::distinct(ROWID, .keep_all = TRUE)
+# change factors with NA to 0
+f <- sapply(cl_dup1, is.factor)
+cl_dup1[f] <- lapply(cl_dup1[f], as.character)
+cl_dup1[is.na(cl_dup1)] <- 0
+cl_dup1[f] <- lapply(cl_dup1[f], as.factor)
+
+# other NAs to 0
+cl_dup1 <-  cl_dup1 %>% replace(is.na(.), 0)
+
+
+score_append <- distinct(cl_dup1, PAT_MEMBER_NO)
+cl_dup1 <- sqldf("select * from cl_dup1 order by CLAIM_NO")
+cl_dup1 <- data.frame(r_index = row.names(cl_dup1),cl_dup1)
+dupes <-cl_dup1
+
+# dupes <- dupes %>%
+#   mutate(CL_DATE_OF_SERVICE_BEG = as.numeric(as.POSIXct(as.character(CL_DATE_OF_SERVICE_BEG))),
+#          CL_DATE_OF_SERVICE_END =   as.numeric(as.POSIXct(as.character(CL_DATE_OF_SERVICE_END))),
+#          CL_DATE_PAID = as.numeric(as.POSIXct(as.character(CL_DATE_PAID)))
+#   )
+
+dupes <-  dupes %>% replace(is.na(.), 0)
+
+
+dupes[sapply(dupes,is.character)] <- lapply(dupes[sapply(dupes, is.character)], as.factor)
+dupes[sapply(dupes,is.integer)] <- lapply(dupes[sapply(dupes, is.integer)], as.factor)
+
+dupes$REVENUE_CODE <- as.factor(as.character(dupes$REVENUE_CODE))
+dupes$Procedure_Code  <- as.factor(as.character(dupes$Procedure_Code ))
+dupes$PAT_MEMBER_NO  <- as.factor(as.character(dupes$PAT_MEMBER_NO ))
+
+
+dupes$ROWID <- NULL
+
+#dupes$PAT_MEMBER_NO <- NULL
+
+dupes$CL_DATE_OF_SERVICE_BEG <- NULL
+dupes$CL_DATE_OF_SERVICE_END <- NULL
+dupes$CL_DATE_PAID  <- NULL
+dupes$source <- NULL
+dupes$r_index <- NULL
+
+dupes$PROVIDER_NO  <- NULL
+
+dupes$PAT_MEMBER_NO <- as.character(dupes$PAT_MEMBER_NO)
+dupes$PIN7 <- as.character(dupes$PIN7)
+dupes$TAX_ID <- as.character(dupes$TAX_ID)
+
+#str(dupes, list.len=ncol(dupes))
+colnames(dupes)[colSums(is.na(dupes)) > 0]
+# 
+# rpairs <- compare.dedup(dupes, blockfld =list(25) ,phonetic = FALSE,
+#                          strcmp =  c("Account", "Business_Line", "CL_AMT_ALLOWED", "CL_AMT_BILLED",
+#                                      "CL_AMT_PAID", "CLAIM_SUFFIX", "Claims_Status", "Coinsurance_Amt",
+#                                      "Copay_Amt", "CPT", "Deductible_Amt", "DIAGNOSIS_1", "DIAGNOSIS_10",
+#                                      "DIAGNOSIS_11", "DIAGNOSIS_2", "DIAGNOSIS_3", "DIAGNOSIS_4", "DIAGNOSIS_5",
+#                                      "DIAGNOSIS_6", "DIAGNOSIS_7", "DIAGNOSIS_8", "DIAGNOSIS_9", "Line_Of_Business",
+#                                      "Other_Ins_Paid_Amt",  "Place_Of_Service",
+#                                      "PRINCIPAL_DIAG", "Procedure_Code", "PROCEDURE_CODE_2", "PROVIDER_NO",
+#                                      "REVENUE_CODE", "Suffix", "Type_Of_Service", "IS_ADJUSTED", "PIN7", "TAX_ID"))
+
+
+new_identity <- dupes$CLAIM_NO
+dupes$CLAIM_NO <- NULL
+# works
+# block on memberid
+rpairs <- compare.dedup(dupes, blockfld =list(25) ,identity = new_identity,
+                        strcmp =  c("Account", "Business_Line", "CL_AMT_ALLOWED", "CL_AMT_BILLED",
+                                    "CL_AMT_PAID", "CLAIM_SUFFIX", "Claims_Status", "Coinsurance_Amt",
+                                    "Copay_Amt", "CPT", "Deductible_Amt", "DIAGNOSIS_1", "Line_Of_Business",
+                                    "Other_Ins_Paid_Amt",  "Place_Of_Service",
+                                    "PRINCIPAL_DIAG",   "Procedure_Code", "PROCEDURE_CODE_2",
+                                    "REVENUE_CODE", "Suffix", "Type_Of_Service", "IS_ADJUSTED", "PIN7", "TAX_ID"
+                                    ))
+
+summary(rpairs)
+# works does string match on dx code
+# rpairs <- compare.dedup(dupes, blockfld =list(25) ,identity = new_identity,
+#                         strcmp =  c("PRINCIPAL_DIAG",  "Procedure_Code", "PROCEDURE_CODE_2"
+#                         ))
+result=classifyUnsup(rpairs,method="bclust")
+
+summary(result)
+
+matches1 <-result$pairs
+
+str(matches1, list.len=ncol(matches1))
+
+
+
+match_pred <- as.data.frame(result$prediction)
+# rename
+names(match_pred)[1] <- "prediction"
+
+
+
+
+#sigle row
+matched_mail <- as.data.frame(getPairs(result, single.rows=TRUE))
+# sum columnhs to get score
+
+matches1$Total <- as.numeric(apply(matches1[,3:42], 1, sum))
+matches1$Total <- (matches1$Total / max(matches1$Total)) * 100
+matches1$PAT_MEMBER_NO <- NULL
+
+
+
+write.table(matches1, file = "matches1.csv",
+            row.names = FALSE, sep ="\t")
+
+
+
+matches2 <- sqldf("select m.*, c.CL_DATE_OF_SERVICE_BEG,
+c.CL_DATE_OF_SERVICE_END,
+c.CL_DATE_PAID,
+c.PROVIDER_NO,
+c.PAT_MEMBER_NO,
+c.source
+from matches1 m, cl_dup1 c
+                  where m.id1 = c.r_index")
+
+
+
+
+# matches1L <- sqldf( "select * from matches2  where prediction = 'L'")
+# 
+# mem1b <- sqldf("select distinct PAT_MEMBER_NO,source from matches1L")
+# mem2b <- sqldf("select source, count(source) as cnt from mem1b group by source" )
+
+
+# V2 only use those where is_match = 1
+
+
+matches2 <- sqldf("select m.*
+                  from matches2 m
+                  where m.is_match = 1")
+
+
+str(matches2, list.len=ncol(matches2))
+
+#matches1 <- cbind(matches1,match_pred)
+
+
+write.table(matches2, file = "matches2.csv",
+            row.names = FALSE, sep ="\t")
+
+
+
+
+
+# only records with a link
+
+
+
+
+ggplot(matches2, aes(x=factor(source), y= Total, fill =factor(source) ))+
+  geom_boxplot(alpha=0.4) +
+  stat_summary(fun.y=mean, geom="point", shape=20, size=5, color = "red", fill="red")+
+  theme(legend.position = "none")+
+  scale_fill_brewer(palette = "Set3")+
+  labs(title = "Score by Source", x = "source", y = "Total")
+
+
+matches2$no_want <- ifelse(matches2$source == "do not want these", 1, 0)
+matches2$leakage <- ifelse(matches2$source == "leakage", 1, 0)
+matches2$past_refunds <- ifelse(matches2$source == "past refunds", 1, 0)
+
+
+anova_no_want <- aov(Total ~ no_want, data = matches2)
+summary(anova_no_want)
+anova_leakage <- aov(Total ~ leakage, data = matches2)
+summary(anova_leakage)
+anova_past_refunds <- aov(Total ~ past_refunds, data = matches2)
+summary(anova_past_refunds)
+
+
+
+
+
+
+
+################### h20
+
+
+# 
+# 
+# 
+# 
+# matches3 <- matches2
+# 
+# matches3$id1 <- NULL
+# matches3$id2 <- NULL
+# matches3$PAT_MEMBER_NO <- NULL
+# matches3$PIN7 <- NULL
+# matches3$TAX_ID <- NULL
+# matches3$is_match <- NULL
+# matches3$Total <- NULL
+# matches3$CL_DATE_OF_SERVICE_BEG <- NULL
+# matches3$CL_DATE_OF_SERVICE_END <- NULL
+# matches3$CL_DATE_PAID <- NULL
+# matches3$PROVIDER_NO <- NULL
+# 
+# 
+# matches3$leakage <- NULL
+# matches3$past_refunds <- NULL
+# matches3$source <- NULL
+# 
+# matches3$no_want <- as.factor(as.character(matches3$no_want))
+# #matches3$leakage <- as.factor(as.character(matches3$leakage))
+# 
+# # remove columns with all constant
+# matches3 <- matches3[sapply(matches3, function(x) length(unique(na.omit(x)))) >1]
+# 
+# 
+# idx <- sample(seq(1,2), size = nrow(matches3), replace = TRUE, prob = c(0.7, 0.3))
+# train <- matches3[idx == 1,]
+# test <- matches3[idx == 2,]
+# 
+# train_h2o <- as.h2o(train)
+# test_h2o <- as.h2o(test)
+# 
+# y <- "no_want"
+# x <- setdiff(colnames(train_h2o),y)
+# 
+# 
+# 
+# nfolds = 10
+# gbm_no_want <- h2o.gbm(x=x,
+#                          y = y,
+#                          training_frame = train_h2o,
+#                validation_frame = test_h2o,
+#                          nfolds = nfolds,
+#                          seed = 77)
+# 
+# summary(gbm_no_want)
+# 
+
+
+# leakage
+
+leaks <- sqldf("select * from matches2 where leakage = 1")
+controls <- sqldf("select * from matches2 where past_refunds = 1")
+
+matches3 <- rbind(leaks,controls)
+
+mem1b <- sqldf("select distinct PAT_MEMBER_NO,source from matches3")
+mem2b <- sqldf("select source, count(source) as cnt from mem1b group by source" )
+
+
+
+
+matches3$id1 <- NULL
+matches3$id2 <- NULL
+matches3$PAT_MEMBER_NO <- NULL
+matches3$PIN7 <- NULL
+matches3$TAX_ID <- NULL
+matches3$is_match <- NULL
+#matches3$Total <- NULL
+matches3$CL_DATE_OF_SERVICE_BEG <- NULL
+matches3$CL_DATE_OF_SERVICE_END <- NULL
+matches3$CL_DATE_PAID <- NULL
+matches3$PROVIDER_NO <- NULL
+
+
+#matches3$leakage <- NULL
+matches3$past_refunds <- NULL
+matches3$source <- NULL
+matches3$no_want <- NULL
+matches3$r_index.1  <- NULL
+
+#matches3$no_want <- as.factor(as.character(matches3$no_want))
+matches3$leakage <- as.factor(as.character(matches3$leakage))
+cor_graphs <- sqldf("select * from matches3 where leakage = 1")
+cor_graphs$leakage <- NULL
+
+cor_graphs$past_refunds <- NULL
+
+co_mat_benign <- cor_graphs %>% 
+  cor()
+co_mat_benign[is.na(co_mat_benign)] = 0
+
+
+library(igraph)
+g_benign <- graph.adjacency(co_mat_benign,
+                            weighted = TRUE,
+                            diag = FALSE,
+                            mode = "upper")
+
+
+
+
+# http://kateto.net/networks-r-igraph
+
+cut.off_b <- mean(E(g_benign)$weight)
+
+
+
+
+g_benign_2 <- delete_edges(g_benign, E(g_benign)[weight < cut.off_b])
+
+
+c_g_benign_2 <- cluster_fast_greedy(g_benign_2) 
+#c_g_benign_2$r_index.1 <- NULL
+membership(c_g_benign_2 )
+sizes(c_g_benign_2)
+
+
+par(mfrow = c(1,2))
+
+plot(c_g_benign_2, g_benign_2,
+     vertex.size = (colSums(co_mat_benign) ** 2) ,
+     vertex.frame.color = NA, 
+     vertex.label.color = "black", 
+     vertex.label.cex = 0.8,
+     edge.width = E(g_benign_2)$weight * 15,
+     layout = layout_with_fr(g_benign_2),
+     main = "SNA Correlation")
+
+
+
+
+
+
+
+
+
+
+
+
+anova_CL_AMT_ALLOWED  <- aov(CL_AMT_ALLOWED ~ leakage,data=matches3)
+anova_CL_AMT_BILLED <- aov(CL_AMT_BILLED ~ leakage,data=matches3)
+anova_CL_AMT_PAID <- aov(CL_AMT_PAID ~ leakage,data=matches3)
+anova_CLAIM_SUFFIX <- aov(CLAIM_SUFFIX ~ leakage,data=matches3)
+anova_Coinsurance_Amt <- aov(Coinsurance_Amt ~ leakage,data=matches3)
+anova_Copay_Amt <- aov(Copay_Amt ~ leakage,data=matches3)
+anova_CPT <- aov(CPT ~ leakage,data=matches3)
+anova_Deductible_Amt <- aov(Deductible_Amt ~ leakage,data=matches3)
+anova_DIAGNOSIS_3 <- aov(DIAGNOSIS_3 ~ leakage,data=matches3)
+anova_DIAGNOSIS_4 <- aov(DIAGNOSIS_4 ~ leakage,data=matches3)
+anova_DIAGNOSIS_5 <- aov(DIAGNOSIS_5 ~ leakage,data=matches3)
+anova_DIAGNOSIS_6 <- aov(DIAGNOSIS_6 ~ leakage,data=matches3)
+anova_DIAGNOSIS_7 <- aov(DIAGNOSIS_7 ~ leakage,data=matches3)
+anova_DIAGNOSIS_8 <- aov(DIAGNOSIS_8 ~ leakage,data=matches3)
+anova_DIAGNOSIS_9 <- aov(DIAGNOSIS_9 ~ leakage,data=matches3)
+anova_Place_Of_Service <- aov(Place_Of_Service ~ leakage,data=matches3)
+anova_PRINCIPAL_DIAG <- aov(PRINCIPAL_DIAG ~ leakage,data=matches3)
+anova_PROCEDURE_CODE_2 <- aov(PROCEDURE_CODE_2 ~ leakage,data=matches3)
+anova_REVENUE_CODE <- aov(REVENUE_CODE ~ leakage,data=matches3)
+anova_Type_Of_Service <- aov(Type_Of_Service ~ leakage,data=matches3)
+anova_IS_ADJUSTED <- aov(IS_ADJUSTED ~ leakage,data=matches3)
+anova_L_MDFR1_CD <- aov(L_MDFR1_CD ~ leakage,data=matches3)
+anova_L_MDFR2_CD <- aov(L_MDFR2_CD ~ leakage,data=matches3)
+anova_L_MDFR3_CD <- aov(L_MDFR3_CD ~ leakage,data=matches3)
+anova_l_units <- aov(l_units ~ leakage,data=matches3)
+anova_l_Total <- aov(Total ~ leakage,data=matches3)
+
+summary(anova_CL_AMT_ALLOWED  ) 
+summary(anova_CL_AMT_BILLED ) 
+summary(anova_CL_AMT_PAID ) 
+summary(anova_CLAIM_SUFFIX ) 
+summary(anova_Coinsurance_Amt ) 
+summary(anova_Copay_Amt ) 
+summary(anova_CPT ) 
+summary(anova_Deductible_Amt ) 
+summary(anova_DIAGNOSIS_3 ) 
+summary(anova_DIAGNOSIS_4 ) 
+summary(anova_DIAGNOSIS_5 ) 
+summary(anova_DIAGNOSIS_6 ) 
+summary(anova_DIAGNOSIS_7 ) 
+summary(anova_DIAGNOSIS_8 ) 
+summary(anova_DIAGNOSIS_9 ) 
+summary(anova_Place_Of_Service ) 
+summary(anova_PRINCIPAL_DIAG ) 
+summary(anova_PROCEDURE_CODE_2 ) 
+summary(anova_REVENUE_CODE ) 
+summary(anova_Type_Of_Service ) 
+summary(anova_IS_ADJUSTED ) 
+summary(anova_L_MDFR1_CD ) 
+summary(anova_L_MDFR2_CD ) 
+summary(anova_L_MDFR3_CD ) 
+summary(anova_l_units ) 
+summary(anova_l_Total ) 
+
+# leakage PCA
+
+leaks <- sqldf("select * from matches2 where leakage = 1")
+controls <- sqldf("select * from matches2 where past_refunds = 1")
+
+matches3 <- rbind(leaks,controls)
+
+matches3$id1 <- NULL
+matches3$id2 <- NULL
+matches3$PAT_MEMBER_NO <- NULL
+matches3$PIN7 <- NULL
+matches3$TAX_ID <- NULL
+matches3$is_match <- NULL
+#matches3$Total <- NULL
+matches3$CL_DATE_OF_SERVICE_BEG <- NULL
+matches3$CL_DATE_OF_SERVICE_END <- NULL
+matches3$CL_DATE_PAID <- NULL
+matches3$PROVIDER_NO <- NULL
+
+
+#matches3$leakage <- NULL
+matches3$past_refunds <- NULL
+#matches3$source <- NULL
+matches3$no_want <- NULL
+matches3$r_index.1  <- NULL
+
+
+# remove columns with all constant
+matches3 <- matches3[sapply(matches3, function(x) length(unique(na.omit(x)))) >1]
+
+m_results <- matches3
+m_results$source <- NULL
+m_results$Total <- NULL
+
+# perform pca and extract scores
+pcaOutput <- prcomp(as.matrix(m_results), scale = TRUE, center = TRUE)
+pcaOutput2 <- as.data.frame(pcaOutput$x)
+
+
+# define groups for plotting
+
+library(ellipse)
+
+mleak <- sqldf("select source as groups from matches3")
+
+
+pcaOutput2 <- cbind(pcaOutput2, mleak )
+pcaOutput2$groups <- as.factor(pcaOutput2$groups)
+
+
+centroids <- aggregate(cbind(PC1, PC2) ~ groups, pcaOutput2, mean)
+
+conf.rgn  <- do.call(rbind, lapply(unique(pcaOutput2$groups), function(t)
+  data.frame(groups = as.character(t),
+             ellipse(cov(pcaOutput2[pcaOutput2$groups == t, 1:2]),
+                     centre = as.matrix(centroids[centroids$groups == t, 2:3]),
+                     level = 0.95),
+             stringsAsFactors = FALSE)))
+
+ggplot(data = pcaOutput2,  main = "Leakage - Is Match" , aes(x = PC1, y = PC2,  color = groups)) + 
+  geom_polygon(data = conf.rgn, aes(fill = groups), alpha = 0.2) +
+  geom_point(size = 2, alpha = 0.6) + 
+  labs(color = "",
+       fill = "") 
+
+
+
+# remove score
+matches3$Total <- NULL
+
+
+idx <- sample(seq(1,2), size = nrow(matches3), replace = TRUE, prob = c(0.7, 0.3))
+train <- matches3[idx == 1,]
+test <- matches3[idx == 2,]
+
+train_h2o <- as.h2o(train)
+test_h2o <- as.h2o(test)
+
+y <- "leakage"
+x <- setdiff(colnames(train_h2o),y)
+
+
+
+nfolds = 10
+gbm_leakage <- h2o.gbm(x=x,
+                       y = y,
+                       training_frame = train_h2o,
+                       validation_frame = test_h2o,
+                       nfolds = nfolds,
+                       seed = 77)
+
+summary(gbm_leakage)
+gbm_leakage_import <- as.data.frame(h2o.varimp(gbm_leakage))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# past_refunds
+
+
+past <- sqldf("select * from matches2 where past_refunds  = 1")
+controls <- sqldf("select * from matches2 where leakage = 1")
+matches3 <- rbind(past,controls)
+
+
+matches3$id1 <- NULL
+matches3$id2 <- NULL
+matches3$PAT_MEMBER_NO <- NULL
+matches3$PIN7 <- NULL
+matches3$TAX_ID <- NULL
+matches3$is_match <- NULL
+#matches3$Total <- NULL
+matches3$CL_DATE_OF_SERVICE_BEG <- NULL
+matches3$CL_DATE_OF_SERVICE_END <- NULL
+matches3$CL_DATE_PAID <- NULL
+matches3$PROVIDER_NO <- NULL
+
+
+matches3$leakage <- NULL
+#matches3$past_refunds <- NULL
+matches3$source <- NULL
+matches3$no_want <- NULL
+matches3$r_index.1  <- NULL
+
+#matches3$no_want <- as.factor(as.character(matches3$no_want))
+matches3$past_refunds <- as.factor(as.character(matches3$past_refunds))
+
+
+cor_graphs <- sqldf("select * from matches3 where past_refunds = 1")
+
+cor_graphs$past_refunds <- NULL
+
+co_mat_benign <- cor_graphs %>% 
+  cor()
+
+
+
+library(igraph)
+g_benign <- graph.adjacency(co_mat_benign,
+                            weighted = TRUE,
+                            diag = FALSE,
+                            mode = "upper")
+
+
+
+
+# http://kateto.net/networks-r-igraph
+
+cut.off_b <- mean(E(g_benign)$weight)
+
+
+g_benign_2 <- delete_edges(g_benign, E(g_benign)[weight < cut.off_b])
+
+
+c_g_benign_2 <- cluster_fast_greedy(g_benign_2) 
+membership(c_g_benign_2 )
+sizes(c_g_benign_2)
+
+
+par(mfrow = c(1,2))
+
+plot(c_g_benign_2, g_benign_2,
+     ertex.size = (colSums(co_mat_benign) ** 2) ,
+     vertex.frame.color = NA, 
+     vertex.label.color = "black", 
+     vertex.label.cex = 0.8,
+     edge.width = E(g_benign_2)$weight * 15,
+     layout = layout_with_fr(g_benign_2),
+     main = "Past Refunds")
+
+
+
+
+
+
+
+
+anova_CL_AMT_ALLOWED  <- aov(CL_AMT_ALLOWED ~ past_refunds,data=matches3)
+anova_CL_AMT_BILLED <- aov(CL_AMT_BILLED ~ past_refunds,data=matches3)
+anova_CL_AMT_PAID <- aov(CL_AMT_PAID ~ past_refunds,data=matches3)
+anova_CLAIM_SUFFIX <- aov(CLAIM_SUFFIX ~ past_refunds,data=matches3)
+anova_Coinsurance_Amt <- aov(Coinsurance_Amt ~ past_refunds,data=matches3)
+anova_Copay_Amt <- aov(Copay_Amt ~ past_refunds,data=matches3)
+anova_CPT <- aov(CPT ~ past_refunds,data=matches3)
+anova_Deductible_Amt <- aov(Deductible_Amt ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_3 <- aov(DIAGNOSIS_3 ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_4 <- aov(DIAGNOSIS_4 ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_5 <- aov(DIAGNOSIS_5 ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_6 <- aov(DIAGNOSIS_6 ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_7 <- aov(DIAGNOSIS_7 ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_8 <- aov(DIAGNOSIS_8 ~ past_refunds,data=matches3)
+anova_DIAGNOSIS_9 <- aov(DIAGNOSIS_9 ~ past_refunds,data=matches3)
+anova_Place_Of_Service <- aov(Place_Of_Service ~ past_refunds,data=matches3)
+anova_PRINCIPAL_DIAG <- aov(PRINCIPAL_DIAG ~ past_refunds,data=matches3)
+anova_PROCEDURE_CODE_2 <- aov(PROCEDURE_CODE_2 ~ past_refunds,data=matches3)
+anova_REVENUE_CODE <- aov(REVENUE_CODE ~ past_refunds,data=matches3)
+anova_Type_Of_Service <- aov(Type_Of_Service ~ past_refunds,data=matches3)
+anova_IS_ADJUSTED <- aov(IS_ADJUSTED ~ past_refunds,data=matches3)
+anova_L_MDFR1_CD <- aov(L_MDFR1_CD ~ past_refunds,data=matches3)
+anova_L_MDFR2_CD <- aov(L_MDFR2_CD ~ past_refunds,data=matches3)
+anova_L_MDFR3_CD <- aov(L_MDFR3_CD ~ past_refunds,data=matches3)
+anova_l_units <- aov(l_units ~ past_refunds,data=matches3)
+anova_l_Total <- aov(l_Total ~ past_refunds,data=matches3)
+
+summary(anova_CL_AMT_ALLOWED  ) 
+summary(anova_CL_AMT_BILLED ) 
+summary(anova_CL_AMT_PAID ) 
+summary(anova_CLAIM_SUFFIX ) 
+summary(anova_Coinsurance_Amt ) 
+summary(anova_Copay_Amt ) 
+summary(anova_CPT ) 
+summary(anova_Deductible_Amt ) 
+summary(anova_DIAGNOSIS_3 ) 
+summary(anova_DIAGNOSIS_4 ) 
+summary(anova_DIAGNOSIS_5 ) 
+summary(anova_DIAGNOSIS_6 ) 
+summary(anova_DIAGNOSIS_7 ) 
+summary(anova_DIAGNOSIS_8 ) 
+summary(anova_DIAGNOSIS_9 ) 
+summary(anova_Place_Of_Service ) 
+summary(anova_PRINCIPAL_DIAG ) 
+summary(anova_PROCEDURE_CODE_2 ) 
+summary(anova_REVENUE_CODE ) 
+summary(anova_Type_Of_Service ) 
+summary(anova_IS_ADJUSTED ) 
+summary(anova_L_MDFR1_CD ) 
+summary(anova_L_MDFR2_CD ) 
+summary(anova_L_MDFR3_CD ) 
+summary(anova_l_units ) 
+summary(anova_l_Total )
+
+
+
+
+
+# pca
+
+library(ellipse)
+
+
+
+past <- sqldf("select * from matches2 where past_refunds  = 1")
+controls <- sqldf("select * from matches2 where leakage = 1")
+
+matches3 <- rbind(past,controls)
+
+
+matches3$id1 <- NULL
+matches3$id2 <- NULL
+matches3$PAT_MEMBER_NO <- NULL
+matches3$PIN7 <- NULL
+matches3$TAX_ID <- NULL
+#matches3$is_match <- NULL
+#matches3$Total <- NULL
+matches3$CL_DATE_OF_SERVICE_BEG <- NULL
+matches3$CL_DATE_OF_SERVICE_END <- NULL
+matches3$CL_DATE_PAID <- NULL
+matches3$PROVIDER_NO <- NULL
+
+
+matches3$leakage <- NULL
+#matches3$past_refunds <- NULL
+matches3$source <- NULL
+matches3$no_want <- NULL
+
+
+#matches3$no_want <- as.factor(as.character(matches3$no_want))
+matches3$past_refunds <- as.factor(as.character(matches3$past_refunds))
+
+# remove columns with all constant
+matches3 <- matches3[sapply(matches3, function(x) length(unique(na.omit(x)))) >1]
+
+matches3$is_match <- as.factor(as.character(matches3$is_match))
+
+m_results <- matches3
+m_results$is_match <- NULL
+m_results$past_refunds <- NULL
+
+
+
+# perform pca and extract scores
+pcaOutput <- prcomp(as.matrix(m_results), scale = TRUE, center = TRUE)
+pcaOutput2 <- as.data.frame(pcaOutput$x)
+
+
+# define groups for plotting
+
+
+mleak <- sqldf("select past_refunds as groups from matches3")
+
+
+pcaOutput2 <- cbind(pcaOutput2, mleak )
+
+
+
+centroids <- aggregate(cbind(PC1, PC2) ~ groups, pcaOutput2, mean)
+
+conf.rgn  <- do.call(rbind, lapply(unique(pcaOutput2$groups), function(t)
+  data.frame(groups = as.character(t),
+             ellipse(cov(pcaOutput2[pcaOutput2$groups == t, 1:2]),
+                     centre = as.matrix(centroids[centroids$groups == t, 2:3]),
+                     level = 0.95),
+             stringsAsFactors = FALSE)))
+
+ggplot(data = pcaOutput2,  main = "All Past Refunds - Is Match" , aes(x = PC1, y = PC2,  color = groups)) + 
+  geom_polygon(data = conf.rgn, aes(fill = groups), alpha = 0.2) +
+  geom_point(size = 2, alpha = 0.6) + 
+  labs(color = "",
+       fill = "") 
+
+
+
+#G+H2O  GBM
+# remove score
+
+
+past <- sqldf("select * from matches2 where past_refunds  = 1")
+controls <- sqldf("select * from matches2 where leakage = 1")
+
+matches3 <- rbind(past,controls)
+
+
+matches3$id1 <- NULL
+matches3$id2 <- NULL
+matches3$PAT_MEMBER_NO <- NULL
+matches3$PIN7 <- NULL
+matches3$TAX_ID <- NULL
+#matches3$is_match <- NULL
+#matches3$Total <- NULL
+matches3$CL_DATE_OF_SERVICE_BEG <- NULL
+matches3$CL_DATE_OF_SERVICE_END <- NULL
+matches3$CL_DATE_PAID <- NULL
+matches3$PROVIDER_NO <- NULL
+
+
+matches3$leakage <- NULL
+matches3$past_refunds <- NULL
+#matches3$source <- NULL
+matches3$no_want <- NULL
+
+
+#matches3$no_want <- as.factor(as.character(matches3$no_want))
+matches3$source <- as.factor(as.character(matches3$source))
+
+# remove columns with all constant
+matches3 <- matches3[sapply(matches3, function(x) length(unique(na.omit(x)))) >1]
+
+matches3$Total <- NULL
+
+
+# remove columns with all constant
+matches3 <- matches3[sapply(matches3, function(x) length(unique(na.omit(x)))) >1]
+matches3$leakage <- NULL
+
+
+
+idx <- sample(seq(1,2), size = nrow(matches3), replace = TRUE, prob = c(0.7, 0.3))
+train <- matches3[idx == 1,]
+test <- matches3[idx == 2,]
+
+train_h2o <- as.h2o(train)
+test_h2o <- as.h2o(test)
+
+y <- "source"
+x <- setdiff(colnames(train_h2o),y)
+
+
+
+nfolds = 10
+gbm_past_refunds <- h2o.gbm(x=x,
+                       y = y,
+                       training_frame = train_h2o,
+                       validation_frame = test_h2o,
+                       nfolds = nfolds,
+                       seed = 77)
+
+summary(gbm_past_refunds)
+
+gbm_past_refunds_import <- as.data.frame(h2o.varimp(gbm_past_refunds))
+

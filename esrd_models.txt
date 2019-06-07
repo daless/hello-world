@@ -1,0 +1,888 @@
+
+ 
+train_auto_ml <- read.csv("train_auto_ml.csv", header=TRUE, sep="\t")
+test_auto_ml <- read.csv("test_auto_ml.csv", header=TRUE, sep="\t")
+
+train_auto_ml$target <- as.factor(as.character((train_auto_ml$target)))
+test_auto_ml $target <- as.factor(as.character((test_auto_ml$target)))
+# 
+# train_auto_ml$CCS__133 <- NULL
+# test_auto_ml $CCS__133 <- NULL
+# 
+# train_auto_ml %>% select(PATIENT_GENDER:CCS__98 , target)
+# test_auto_ml %>% select(PATIENT_GENDER:CCS__93  , target)
+# 
+# str(train_auto_ml, list.len=ncol(train_auto_ml))
+# str(test_auto_ml, list.len=ncol(test_auto_ml))
+
+
+feature_exclusions <- c("target" )
+features <- setdiff(colnames(train_auto_ml),feature_exclusions)
+
+#features <- c(features)
+y <- c("target")
+x <- colnames(train_auto_ml)
+
+
+
+# C5
+treeC5_boost <- C5.0(target ~., data = train_auto_ml, trials = 10)
+sink('treeC5_boost.txt')
+summary(treeC5_boost)
+sink()
+
+predict_c5_boost <- predict(treeC5_boost, test_auto_ml)
+
+summary(predict_c5_boost )
+table(predict_c5_boost,test_auto_ml$target )
+
+
+# C5 rule
+ruleC5_boost <- C5.0(target ~., data = train_auto_ml, rules = TRUE, trials = 30)
+sink('treeC5_tree_boost.txt')
+summary(ruleC5_boost )
+sink()
+
+predict_rulec5_boost <- predict(ruleC5_boost, test_auto_ml)
+table(predict_rulec5_boost,test_auto_ml$target )
+summary(predict_rulec5_boost)
+
+# C5 rule no boost
+ruleC5 <- C5.0(target ~., data = train_auto_ml, rules = TRUE)
+predict_rulec5 <- predict(ruleC5, test_auto_ml)
+table(predict_rulec5,test_auto_ml$target )
+summary(predict_rulec5)
+
+
+
+# c50Grid <- expand.grid(.trials = c(1:9, (1:10)*10),
+#                        .model = c("tree", "rules"),
+#                        .winnow = c(TRUE, FALSE))
+# c50Grid
+# set.seed(77) # important to have reproducible results
+# c5Fitvac <- train(target ~ .,
+#                   data = train_auto_ml,
+#                   method = "C5.0",
+#                   tuneGrid = c50Grid,
+#                   trControl = ctrl,
+#                   metric = "Accuracy", # not needed it is so by default
+#                   importance=TRUE, # not needed
+#                   preProc = c("center", "scale")) 
+
+
+# SVM
+
+# SVM using caret package
+
+# number = number of cross validations , method = "repeatedcv" means repeated cross-validation repeat crossvlidation 3 times
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, savePredictions = 'final')
+set.seed(77)
+svm_Linear <- train(target ~., data = train_auto_ml, method = "svmLinear",
+                    trControl=trctrl,
+                    tuneLength = 10)
+svm_Linear
+
+test_pred <- predict(svm_Linear, newdata = test_auto_ml)
+test_pred
+confusionMatrix(test_pred, test_auto_ml$target)
+confusionMatrix(reference = test_auto_ml$target, data= test_pred, mode='everything')
+
+
+
+# test_pred2 <- performance(test_pred, "auc")
+# test_pred2 
+# test_pred2 <- performance(test_pred2, "tpr", "fpr")
+# # plot ROC
+# plot(test_pred2 , col = "green",lwd=1.5)
+
+# adaboost
+model_adaboost <- train(target ~., data = train_auto_ml, method = "adaboost",
+                        trControl=trctrl)
+model_adaboost				 
+
+
+# xgboost
+set.seed(77)
+model_xgbDART <- train(target ~., data = train_auto_ml, method = "xgbDART",
+                       trControl=trctrl, tuneLength = 5)
+model_xgbDART				
+
+
+
+# not tested
+plot(roc(predictor = modelObject$pred$CLASSNAME, response = modelObject$pred$obs))
+
+
+# SVM linear with grid search
+grid <- expand.grid(C = c( 2,3,4,5))
+set.seed(77)
+svm_Linear_Grid <- train(target ~., data = train_auto_ml, method = "svmLinear",
+                         trControl=trctrl,
+                         tuneGrid = grid,
+                         tuneLength = 10)
+
+svm_Linear_Grid
+plot(svm_Linear_Grid)
+
+test_pred_grid <- predict(svm_Linear_Grid, newdata = test_auto_ml)
+test_pred_grid
+
+
+confusionMatrix(test_pred_grid,test_auto_ml$target )
+varImp(svm_Linear_Grid$finalModel)
+
+# SVM with non linear kernel
+set.seed(77)
+
+svm_Radial <- train(target ~., data = train_auto_ml, method = "svmRadial", trControl=trctrl, tuneLength = 10)
+
+svm_Radial
+plot(svm_Radial)
+
+test_pred_Radial <- predict(svm_Radial, newdata = test_auto_ml)
+confusionMatrix(test_pred_Radial, test_auto_ml$target )
+
+
+
+
+# SVM radial
+# check wrapping
+grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.025, 0.03, 0.04, 0.05,
+                                     0.06, 0.07,0.08, 0.09, 0.1, 0.25, 0.5, 0.75,0.9),
+                           C = c(0,0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2,5))
+set.seed(77)
+
+svm_Radial_Grid <- train(target ~., data = train_auto_ml, method = "svmRadial",
+                         trControl=trctrl,
+                         tuneGrid = grid_radial,
+                         tuneLength = 10)
+
+svm_Radial_Grid
+
+plot(svm_Radial_Grid)
+
+test_pred_Radial_Grid <- predict(svm_Radial_Grid, newdata = test_auto_ml)
+
+confusionMatrix(test_pred_Radial_Grid, test_auto_ml$target )
+
+# use resample to compare models
+resample1 <- resample(list(ADABOOST = model_adaboost, XGBDART = model_xgbDART, SVM = svm_Linear_Grid))
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+# boxplot
+
+bwplot(resample1, scales=scales)
+
+resample2 <- resample(list(ADABOOST = model_adaboost, XGBDART = model_xgbDART, SVM = svm_Radial))
+bwplot(resample2, scales=scales)
+
+resample3 <- resample(list(ADABOOST = model_adaboost, XGBDART = model_xgbDART, SVM = svm_Radial_Grid))
+bwplot(resample3, scales=scales)
+
+
+
+
+################################################################################
+
+# H2o Models
+
+# how to get h2o help
+#args(h2o.deeplearning)
+#help(h2o.deeplearning)
+#example(h2odeeplearning)
+
+
+
+train <- as.h2o(train_auto_ml)
+test <- as.h2o(test_auto_ml)
+
+y <- "target"
+x <- setdiff(names(train), y)
+
+# GBM
+
+# if models do not take long to run add reproducible = TRUE,
+
+response <- "target"
+train_auto_ml[[response]] <- as.factor(train_auto_ml[[response]])
+predictors <- setdiff(colnames(train_auto_ml),response)
+
+#train <- as.h2o(train_auto_ml)
+gbm <- h2o.gbm(x= predictors, y=response, training_frame = train, nfolds = 10)
+h2o.varimp(gbm)
+
+
+summary(gbm)
+# as dataframe - if works put st end of all models
+head(as.data.frame(h2o.varimp(gbm)),n=10)
+h2o.varimp_plot(gbm)
+# AUC if works add to all models
+#h2o.auc(gbm,valid=TRUE)
+
+
+gbm@model$validation_metrics
+h2o.confusionMatrix(gbm,valid=TRUE)
+h2o.hit_ratio_table(gbm,valid = T)[1,2]
+
+pred_gbm <- h2o.performance(gbm, newdata = test)
+pred_gbm
+plot(pred_gbm)
+plot(pred_gbm, type = "roc")
+plot(pred_gbm, type = "cutoffs")
+
+h2o.saveModel(gbm, path = "gbm", force =TRUE)
+
+# "/home/dless1/aetna/gbm/GBM_model_R_1525280852323_491"
+
+
+
+# to load model
+#gbm <- h2o.loadModel(the pathe from above)
+#gbm <- h2o.loadModel( "")
+#"/home/dless1/anthem/gbm/GBM_model_R_1523615657537_26153"
+
+gbm_2a <- h2o.gbm(x= predictors, y=response, training_frame = train, validation_frame = test, nfolds = 10)
+
+summary(gbm_2a)
+
+head(as.data.frame(h2o.varimp(gbm_2a)),n=10)
+h2o.saveModel(gbm_2a, path = "gbm", force =TRUE)
+#"/home/dless1/aetna/gbm/GBM_model_R_1525280852323_1093"
+
+
+
+pred_gbm@model$validation_metrics
+pred_gbm <- h2o.predict(gbm, newdata = test)
+h2o.confusionMatrix(pred_gbm,valid=TRUE)
+
+# scored claims
+
+pred_gbm
+
+
+# gbm with stochastics to determine best parameters
+gbm2 <- h2o.gbm(
+  x = predictors,
+  y = response,
+  training_frame = train,
+  validation_frame = test,
+  ntrees = 100,
+  learn_rate = 0.01,
+  stopping_rounds = 5,
+  stopping_tolerance = 1e-4,
+  
+  sample_rate = 0.8,
+  col_sample_rate = 0.8,
+  seed = 77,
+  score_tree_interval = 10
+)
+
+summary(gbm2)
+h2o.auc(h2o.performance(gbm2, valid = TRUE))
+head(as.data.frame(h2o.varimp(gbm2)),n=10)
+
+
+
+h2o.confusionMatrix(gbm2,valid=TRUE)
+
+
+
+
+
+
+
+# GBM GRID
+# gbm using hper parameter search
+hyper_params = list(max_depth = seq(1,29,2))
+
+grid <- h2o.grid(
+  hyper_params = hyper_params,
+  search_criteria = list(strategy = "Cartesian"),
+  algorithm = "gbm",
+  grid_id = "depth_grid",
+  x = predictors,
+  y = response,
+  training_frame = train,
+  validation_frame = test,
+  ntrees = 200,
+  learn_rate = 0.05,
+  learn_rate_annealing = 0.99,
+  sample_rate = 0.8,
+  col_sample_rate = 0.8,
+  seed = 77,
+  stopping_rounds =5,
+  stopping_tolerance = 1e-4,
+  stopping_metric = "AUC",
+  score_tree_interval = 10
+)
+grid
+# sort grid models be creasing AUC
+sortedGrid <- h2o.getGrid("depth_grid", sort_by="auc", decreasing = TRUE)
+sortedGrid
+
+# find the range of max_depth for the top 5 models
+topDepths = sortedGrid@summary_table$max_depth[1:5]
+minDepth = min(as.numeric(topDepths))
+maxDepth = max(as.numeric(topDepths))
+minDepth
+maxDepth
+
+
+hyper_params = list(
+  max_depth = seq(minDepth, maxDepth, 1),
+  sample_rate = seq(0.2, 1, 0.01),
+  col_sample_rate = seq(0.2, 1, 0.01),
+  col_sample_rate_per_tree = seq(0.2, 1, 0.01),
+  col_sample_rate_change_per_level = seq(0.9, 1.1, 0.01),
+  min_rows = 2^seq(0, log2(nrow(train)) - 1, 1),
+  nbins = 2^seq(4, 10, 1),
+  nbins_cats = 2^seq(4, 12, 1),
+  min_split_improvement = c(0, 1e-8, 1e-6, 1e-4),
+  histogram_type = c("UniformAdaptive", "QuantilesGlobal", "RoundRobin")
+  
+)
+
+search_criteria = list(
+  
+  strategy = "RandomDiscrete",
+  max_runtime_secs = 36000,
+  max_models = 100,
+  seed = 77,
+  stopping_rounds = 5,
+  stopping_metric = "AUC",
+  stopping_tolerance = 1e-3
+)
+
+# if try different parametrs - change grid_id each time
+grid <- h2o.grid(
+  hyper_params = hyper_params,
+  search_criteria = search_criteria,
+  algorithm = "gbm",
+  grid_id = "final_grid",
+  x = predictors,
+  y = response,
+  training_frame = train,
+  validation_frame = test,
+  ntrees = 100,
+  learn_rate = 0.05,
+  learn_rate_annealing = 0.99,
+  max_runtime_secs = 360,
+  stopping_rounds = 5,
+  stopping_tolerance = 1e-4,
+  stopping_metric = "AUC",
+  score_tree_interval = 10,
+  seed = 77
+)
+
+##### from h2o tutorials in rclas h20 folder
+# sort grid models by AUC
+sortedGrid <- h2o.getGrid("final_grid", sort_by = "auc", decreasing = TRUE)
+print(sortedGrid)
+
+summary(grid)
+
+##########################################################################
+
+
+# Random Forest
+
+nfolds = 10
+
+rf <- h2o.randomForest(x=x,
+                       y = y,
+                       training_frame = train,
+                       ntrees = 500,
+                       nfolds = nfolds,
+                       fold_assignment = "Modulo",
+                       keep_cross_validation_predictions = TRUE,
+                       seed = 77)
+
+
+summary(rf)
+h2o.saveModel(rf, path = "rf", force =TRUE)
+# "/home/dless1/aetna/rf/DRF_model_R_1525280852323_1749"
+head(as.data.frame(h2o.varimp(rf)),n=10)
+
+pred_rf <- h2o.performance(rf, newdata = test,  valid = TRUE)
+
+summary(pred_rf)
+pred_rf@model$validation_metrics
+pred_rf
+plot(pred_rf)
+
+head(as.data.frame(h2o.varimp(pred_rf)),n=10)
+h2o.varimp_plot(pred_rf)
+
+
+
+rf_2 <- h2o.randomForest(x=x,
+                       y = y,
+                       training_frame = train,
+                       ntrees = 500,
+                       nfolds = nfolds,
+                       sample_rate = 0.85,
+                       fold_assignment = "Modulo",
+                       stopping_tolerance = 1e-2,
+                       stopping_rounds = 2,
+                       keep_cross_validation_predictions = TRUE,
+                       seed = 77)
+
+#h2o.saveModel(rf_2, path = "rf_2", force =TRUE)
+#"/home/dless1/anthem/rf_2/DRF_model_R_1523615657537_43711"
+
+
+pred_rf_2 <- h2o.performance(rf_2, newdata = test,  valid = TRUE)
+pred_rf_2
+h2o.varimp(rf_2)
+
+rf_3 <- h2o.randomForest(x=x,
+                         y = y,
+                         training_frame = train,
+                         validation_frame = test,
+                         ntrees = 500,
+                         nfolds = nfolds,
+                         nbins = 50,
+                         balance_classes = TRUE,
+                         fold_assignment = "Modulo",
+                         stopping_tolerance = 1e-2,
+                         stopping_rounds = 2,
+                         keep_cross_validation_predictions = TRUE,
+                         seed = 77)
+
+# pred_rf_3 <- h2o.performance(rf_3, newdata = test,  valid = TRUE)
+# pred_rf_3
+
+summary(rf_3)
+head(as.data.frame(h2o.varimp(rf_3)),n=10)
+
+h2o.saveModel(rf_3, path = "rf_3", force =TRUE)
+#"/home/dless1/aetna/rf_3/DRF_model_R_1525280852323_2495"
+
+
+
+# 
+# # with validation
+# rf_validate <- h2o.randomForest(x=x,
+#                        y = y,
+#                        training_frame = train,
+#                        validation_frame = test,
+#                        ntrees = 500,
+#                        seed = 77)
+# 
+# summary(rf_validate)
+
+# xgboost
+
+nfolds <- 10
+xgboost <- h2o.xgboost(x=x,
+                             y = y,
+                             training_frame = train,
+                             validation_frame = test,
+                             ntrees = 200,
+                             nfolds = nfolds,
+                             fold_assignment = "Modulo",
+                             keep_cross_validation_predictions = TRUE,
+                             max_depth = 3,
+                             min_rows = 2,
+                             learn_rate =0.2,
+                             seed = 77)
+
+summary(xgboost)
+plot(xgboost)
+head(as.data.frame(h2o.varimp(xgboost)),n=10)
+h2o.varimp_plot(xgboost)
+
+h2o.saveModel(xgboost, path = "xgboost", force =TRUE)
+
+#"/home/dless1/aetna/xgboost/XGBoost_model_R_1525280852323_2754"
+
+nfolds=10
+xgboost_notest <- h2o.xgboost(x=x,
+                       y = y,
+                       training_frame = train,
+                       ntrees = 200,
+                       nfolds = nfolds,
+                       fold_assignment = "Modulo",
+                       keep_cross_validation_predictions = TRUE,
+                       max_depth = 3,
+                       min_rows = 2,
+                       learn_rate =0.2,
+                       seed = 77)
+
+
+
+
+h2o.saveModel(xgboost_notest, path = "xgboost_notest", force =TRUE)
+
+#"/home/dless1/anthem/xgboost_notest/XGBoost_model_R_1524588248567_1"
+
+#xgboost_notest <- h2o.loadModel("/home/dless1/anthem/xgboost_notest/XGBoost_model_R_1524588248567_1")
+
+pred_xgboost_train_74 <- h2o.predict(xgboost_notest, newdata = test,  valid = TRUE)
+
+##########
+# h2o ensemble
+
+# stacked ensemble model
+# random forest and GBM
+
+
+
+# max and min rows based upon above max and min depth
+# experiment with fold_assignment "AUTO", "Random", "Modulo", "Stratified"
+
+nfolds = 10
+
+solo_gbm <- h2o.gbm(
+  x = x,
+  y = y,
+  training_frame = train,
+  distribution = "bernoulli",
+  ntrees = 200,
+  max_depth = 29,
+  min_rows = 17,
+  learn_rate = 0.2,
+  nfolds = nfolds,
+  fold_assignment = "Modulo",
+  keep_cross_validation_predictions = TRUE,
+  seed = 77
+)
+
+solo_rf <- h2o.randomForest(x=x,
+                                            y = y,
+                                            training_frame = train,
+                                            ntrees = 200,
+                                            nfolds = nfolds,
+                                            fold_assignment = "Modulo",
+                                            keep_cross_validation_predictions = TRUE,
+                                            seed = 77)
+
+
+# shallow
+solo_xgboost1 <- h2o.xgboost(x=x,
+                            y = y,
+                            training_frame = train,
+                            ntrees = 200,
+                            nfolds = nfolds,
+                            fold_assignment = "Modulo",
+                            keep_cross_validation_predictions = TRUE,
+                            max_depth = 3,
+                            min_rows = 2,
+                            learn_rate =0.2,
+                            seed = 77)
+# deepeer
+solo_xgboost2 <- h2o.xgboost(x=x,
+                             y = y,
+                             training_frame = train,
+                             ntrees = 200,
+                             nfolds = nfolds,
+                             fold_assignment = "Modulo",
+                             keep_cross_validation_predictions = TRUE,
+                             max_depth = 11,
+                             min_rows = 1,
+                             learn_rate =0.1,
+                             sample_rate = 0.7,
+                             col_sample_rate = 0.9,
+                             seed = 77)
+
+solo_dl <- h2o.deeplearning(x=x,
+                            y = y,
+                            training_frame = train,
+                            l1 = 0.001,
+                            l2 = 0.001,
+                            hidden = c(200,100,200),
+                            nfolds = nfolds,
+                            fold_assignment = "Modulo",
+                            keep_cross_validation_predictions = TRUE,
+                            seed = 77)
+
+ensemble <- h2o.stackedEnsemble(x=x,
+                                y=y,
+                                training_frame = train,
+                                model_id = "ensemble_binomial",
+                                base_models = list(solo_gbm@model_id, solo_rf@model_id,solo_xgboost1@model_id,
+                                                   solo_xgboost1@model_id, solo_dl@model_id))
+
+
+h2o.saveModel(ensemble, path = "ensemble", force =TRUE)
+#"/home/dless1/aetna/ensemble/ensemble_binomial""
+
+
+
+perf_gbm_test <-  h2o.performance(solo_gbm, newdata = test)
+perf_rf_test <-  h2o.performance(solo_rf, newdata = test)
+perf_solo_xgboost1_test <-  h2o.performance(solo_xgboost1, newdata = test)
+perf_solo_xgboost2_test <-  h2o.performance(solo_xgboost2, newdata = test)
+perf_solo_solo_dl <-  h2o.performance(solo_dl, newdata = test)
+perf_ensemble <- h2o.performance(ensemble, newdata = test)
+
+
+baselearner_best_auc_test <- max(h2o.auc(perf_gbm_test), h2o.auc(perf_rf_test),  h2o.auc(perf_solo_xgboost1_test),
+                                 h2o.auc(perf_solo_xgboost2_test),h2o.auc(perf_solo_solo_dl))
+
+ensemble_auc_test <- h2o.auc(perf_ensemble)
+print(sprintf("Best Base-learner Test AUC: %s", baselearner_best_auc_test))
+print(sprintf("Ensemble Test AUC:  %s", ensemble_auc_test))
+
+pred_ensemble <- h2o.predict(ensemble, newdata = test)
+pred_ensemble
+# compare to base learner performance
+
+
+
+
+
+# ENSEMBLE WITH GRID SEARCH
+# use parameters from grid search above
+#SLOW TO RUN
+
+
+gbm_grid_ensemble <- h2o.grid(
+  algorithm = "gbm",
+  grid_id = "gbm_grid_binomial",
+  x = x,
+  y = y,
+  training_frame = train,
+  ntrees = 500,
+  seed = 77,
+  nfolds = nfolds,
+  fold_assignment = "Modulo",
+  keep_cross_validation_predictions = TRUE,
+  hyper_params = hyper_params,
+  search_criteria = search_criteria)
+
+
+
+ensemble2 <- h2o.stackedEnsemble(
+  x = x,
+  y = y,
+  training_frame = train,
+  model_id = "ensemble_gbm_grid_binomial",
+  base_models = gbm_grid_ensemble@model_ids
+)
+
+h2o.saveModel(ensemble2, path = "fit2", force =TRUE)
+#"/home/dless1/aetna/fit2/ensemble_gbm_grid_binomial"
+
+perf_grid_ensemble <- h2o.performance(ensemble2, newdata = test)
+
+# compare to base learner performance on test setwd
+getauc <- function(mm) h2o.auc(h2o.performance(h2o.getModel(mm), newdata = test))
+base_leaner_aucs2 <- sapply(gbm_grid_ensemble@model_ids, getauc)
+baselearner_best_auc_test2 <- max(base_leaner_aucs2)
+ensemble_auc_test2 <- h2o.auc(perf)
+print(sprintf("Best Base-learner Test AUC GRID:  %s", baselearner_best_auc_test2))
+print(sprintf("Ensemble Test AUC GRID:  %s", ensemble_auc_test2))
+
+
+
+
+
+
+
+
+family <- "binomial"
+
+# default learners
+learner <- c("h2o.glm.wrapper","h2o.randomForest.wrapper", "h2o.gbm.wrapper", "h2o.deeplearning.wrapper")
+
+# from docs 
+
+metalearner <- "h2o.glm.wrapper"
+
+
+
+
+# start with 10 fold cross validation
+
+fit <- h2o.ensemble(x = x,
+                    y = y,
+                    training_frame = train,
+                    family = family,
+                    learner = learner,
+                    metalearner = metalearner,
+                    cvControl = list(V=10))
+
+h2o.saveModel(fit, path = "fit2", force =TRUE)
+# performance
+perf_E1 <- h2o.ensemble_performance(fit, newdata = test)
+perf_E1
+
+print(perf_E1, metric = "MSE")
+print(perf_E1, metric = "AUC")
+
+
+
+# use super learner
+# example learners
+h2o.glm.1 <- function(..., alpha = 0.0) h2o.glm.wrapper(..., alpha = alpha)
+h2o.glm.2 <- function(..., alpha = 0.5) h2o.glm.wrapper(..., alpha = alpha)
+h2o.glm.3 <- function(..., alpha = 1.0) h2o.glm.wrapper(..., alpha = alpha)
+h2o.randomForest.1 <- function(..., ntrees = 200, nbins = 50, seed = 1) h2o.randomForest.wrapper(..., ntrees = ntrees, nbins = nbins, seed = seed)
+h2o.randomForest.2 <- function(..., ntrees = 200, sample_rate = 0.75, seed = 1) h2o.randomForest.wrapper(..., ntrees = ntrees, sample_rate = sample_rate, seed = seed)
+h2o.randomForest.3 <- function(..., ntrees = 200, sample_rate = 0.85, seed = 1) h2o.randomForest.wrapper(..., ntrees = ntrees, sample_rate = sample_rate, seed = seed)
+h2o.randomForest.4 <- function(..., ntrees = 200, nbins = 50, balance_classes = TRUE, seed = 1) h2o.randomForest.wrapper(..., ntrees = ntrees, nbins = nbins, balance_classes = balance_classes, seed = seed)
+h2o.gbm.1 <- function(..., ntrees = 100, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, seed = seed)
+h2o.gbm.2 <- function(..., ntrees = 100, nbins = 50, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, nbins = nbins, seed = seed)
+h2o.gbm.3 <- function(..., ntrees = 100, max_depth = 10, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, max_depth = max_depth, seed = seed)
+h2o.gbm.4 <- function(..., ntrees = 100, col_sample_rate = 0.8, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, col_sample_rate = col_sample_rate, seed = seed)
+h2o.gbm.5 <- function(..., ntrees = 100, col_sample_rate = 0.7, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, col_sample_rate = col_sample_rate, seed = seed)
+h2o.gbm.6 <- function(..., ntrees = 100, col_sample_rate = 0.6, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, col_sample_rate = col_sample_rate, seed = seed)
+h2o.gbm.7 <- function(..., ntrees = 100, balance_classes = TRUE, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, balance_classes = balance_classes, seed = seed)
+h2o.gbm.8 <- function(..., ntrees = 100, max_depth = 3, seed = 1) h2o.gbm.wrapper(..., ntrees = ntrees, max_depth = max_depth, seed = seed)
+h2o.deeplearning.1 <- function(..., hidden = c(500,500), activation = "Rectifier", epochs = 50, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+h2o.deeplearning.2 <- function(..., hidden = c(200,200,200), activation = "Tanh", epochs = 50, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+h2o.deeplearning.3 <- function(..., hidden = c(500,500), activation = "RectifierWithDropout", epochs = 50, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+h2o.deeplearning.4 <- function(..., hidden = c(500,500), activation = "Rectifier", epochs = 50, balance_classes = TRUE, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, balance_classes = balance_classes, seed = seed)
+h2o.deeplearning.5 <- function(..., hidden = c(100,100,100), activation = "Rectifier", epochs = 50, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+h2o.deeplearning.6 <- function(..., hidden = c(50,50), activation = "Rectifier", epochs = 50, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+h2o.deeplearning.7 <- function(..., hidden = c(100,100), activation = "Rectifier", epochs = 50, seed = 1)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+
+h2o.randomForest.3b <- function(..., ntrees = 500, sample_rate = 0.85, seed = 77) h2o.randomForest.wrapper(..., ntrees = ntrees, sample_rate = sample_rate, seed = seed)
+h2o.randomForest.4b <- function(..., ntrees = 500, nbins = 50, balance_classes = TRUE, seed = 77) h2o.randomForest.wrapper(..., ntrees = ntrees, nbins = nbins, balance_classes = balance_classes, seed = seed)
+h2o.deeplearning.2a <- function(..., hidden = c(200,200,200), activation = "Tanh", epochs = 50, seed = 77)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation, seed = seed)
+h2o.deeplearning.2b <- function(..., hidden = c(10,2,10), activation = "Tanh", epochs = 100, seed = 77)  h2o.deeplearning.wrapper(..., hidden = hidden, activation = activation,  seed = seed)
+h2o.gbm.8b <- function(..., ntrees = 500, max_depth = 11, seed = 77) h2o.gbm.wrapper(..., ntrees = ntrees, max_depth = max_depth, seed = seed)
+
+
+
+
+family <- "binomial"
+learner <- c("h2o.deeplearning.2b","h2o.glm.wrapper","h2o.randomForest.3b", "h2o.randomForest.4b", "h2o.gbm.7", "h2o.gbm.3","h2o.gbm.8b","h2o.deeplearning.1","h2o.deeplearning.3","h2o.deeplearning.7",
+           "h2o.deeplearning.2a" )
+metalearner <- "h2o.glm.wrapper"
+fit2 <- h2o.ensemble(x = x,
+                    y = y,
+                    training_frame = train,
+                    family = family,
+                    learner = learner,
+                    metalearner = metalearner,
+                    cvControl = list(V=10))
+summary(fit2)
+
+perf_E2 <- h2o.ensemble_performance(fit2, newdata = test)
+perf_E2  
+
+print(perf_E2, metric = "MSE")
+print(perf_E2, metric = "AUC")
+
+
+h2o.saveModel(fit2, path = "fit2", force =TRUE)
+
+# to generate predictions
+ensemble_learner_predictions <- predict(fit2, )
+
+
+# deep learning
+
+
+# list of features for unspervised learning
+# features to exclude
+#feature_exclusions <- c("member_ID","CLAIM_ID", "FEED_ID", "target" )
+#features <- setdiff(colnames(train_SMOTE),feature_exclusions)
+
+# train_unsupervised <-train_SMOTE
+# train_unsupervised$member_ID <- NULL
+# train_unsupervised$CLAIM_ID <- NULL
+# train_unsupervised$FEED_ID <- NULL
+# train_unsupervised$target <- NULL
+# features <- colnames(train_unsupervised)
+# train_unsupervised <- as.h2o(train_SMOTE)
+# 
+# # convert to h2o data frame
+# 
+# test_unsupervised <-test_SMOTE
+# test_unsupervised$member_ID <- NULL
+# test_unsupervised$CLAIM_ID <- NULL
+# test_unsupervised$FEED_ID <- NULL
+# test_unsupervised$target <- NULL
+# test_unsupervised <- as.h2o(test_SMOTE)
+
+# in R tutorials manual
+#ep <- c(1,250,500,750)
+# in folumla below epochs = ep[2] to select second in list
+
+
+
+model_nn <- h2o.deeplearning(x = features,
+                             training_frame = train,
+                             autoencoder = TRUE,
+                             reproducible = TRUE,
+                             ignore_const_cols = FALSE,
+                             seed = 77,
+                             hidden = c(10, 2, 10),
+                             epochs = 100,
+                             activation = "Tanh")
+
+model_nn
+
+
+# convert to autoencoded representation using test data
+# 61 features
+test_autoenc <- h2o.predict(model_nn, test)
+str(train, list.len=ncol(train))
+
+train_features <- h2o.predict(model_nn, train, layer = 2) %>%
+  as.data.frame() %>%
+  mutate(Class = as.vector(train_unsupervised[, 61]))
+
+
+model_nn_dim <- h2o.deeplearning(x = features,
+                                 y=response,
+                                 training_frame = train,
+                                 reproducible = TRUE,
+                                 ignore_const_cols = FALSE,
+                                 seed = 77,
+                                 hidden = c(10, 2, 10),
+                                 epochs = 100,
+                                 activation = "Tanh")
+
+h2o.saveModel(model_nn_dim, path = "model_nn_dim", force =TRUE)
+# "/home/dless1/anthem/model_nn_dim/DeepLearning_model_R_1523615657537_19578"
+model_nn_dim
+
+model_nn_dim_2 <- h2o.deeplearning(x = features,
+                                   y=response,
+                                   training_frame = train,
+                                   validation_frame = test,
+                                   reproducible = TRUE,
+                                   ignore_const_cols = FALSE,
+                                   seed = 77,
+                                   hidden = c(10, 2, 10),
+                                   epochs = 100,
+                                   activation = "Tanh")
+
+model_nn_dim_2 
+summary(model_nn_dim_2)
+
+test_dim <- h2o.deepfeatures(model_nn_dim, test, layer = 3)
+
+layer3 <- h2o.predict(model_nn_dim, test) %>%
+  as.data.frame() %>%
+  mutate(actual = as.vector(test[,61])) %>%
+  group_by(actual, predict) %>%
+  summarise(n =n()) %>%
+  mutate(freq = n/ sum(n))
+
+
+# anomoly
+anomaly <- h2o.anomaly(model_nn, test) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column() %>%
+  mutate(Class = as.vector(test[,61]))
+
+# with real data see if this is factor not a number
+
+anomaly$Class <- as.factor(as.integer(anomaly$Class))
+
+mean_mse <- anomaly %>%
+  group_by(Class) %>%
+  summarise(mean = mean(Reconstruction.MSE))
+
+
+ggplot(anomaly, aes(x = as.numeric(rowname), y = Reconstruction.MSE, color = as.factor(Class))) +
+  geom_point(alpha = 0.3) +
+  geom_hline(data = mean_mse, aes(yintercept = mean, color = Class)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Claims",
+       color = "Class")
+
