@@ -1,0 +1,414 @@
+schottie
+7d3bd2d5
+
+if loose wireless bring up pusle helper app and click remediate
+
+when changing password must lock and unlock computer for them to go into effect
+
+dless1
+Valdese#18
+
+PIN
+Valdese#11
+
+equian
+Valdese#19
+
+Unix LDAP active directory password
+Basset#8
+
+
+employee id
+001326365
+
+dale.less@optum.com
+
+
+
+rally
+http://goto.uhc.com/rally/sso
+Valdese5
+
+
+rally for health
+dale.less@optum.com
+Valdese#99
+daleTN
+
+
+flowdock
+dale.less@optum.com
+Password1
+
+
+python
+https://apsrd9425.uhc.com:8000/hub/login
+
+linux
+make directory   
+
+windows password  Valdese#2
+
+cara pw  Valdese#1
+
+RSA
+52155215
+then the code on the token
+
+ms password image of a golden
+dog
+
+sharepoint
+http://ss.optum.com/sites/transactions/aal/Predictive/DataScienceCommercial/Shared%20Documents/Forms/AllItems.aspx
+
+R studio server - PUTTY first into apsrd9425
+http://apsrd9425.uhc.com:8787/auth-sign-in
+
+jupyter notebook
+apsrd9425.uhc.com:8000/user/dless1/tree
+
+TPS
+https://new-wiki.optum.com/display/AALCDSH/Tasks-Dale
+
+MAPR ACCESS
+/mapr/apps/cds/post
+
+
+h2o flow
+apsrd9425.uhc.com:54321
+
+
+h2o on laptop
+cd h2o-3.20.0.2
+java -jar "C:\h2o-3.20.0.2\h2o-3.20.0.2"
+in firefox
+http://192.168.1.3:54321/flow/index.html
+
+
+sparkling water
+
+library(rsparkling)
+  
+ 
+options(rsparkling.sparklingwater.version = "2.1.13")
+  
+dir
+
+
+
+file transfer
+https://new-wiki.optum.com/display/AALCDSH/File+Transfer
+cd Desktop
+scp CCSdesc.csv apsrd9425:~/healthfirst
+scp CMS_Jcode_max_units:~/healthfirst
+scp ccs_dx_icd10cm_2018_1.csv apsrd9425:~/BCBSFL
+scp NYU_ED_wts.txt apsrd9425:~/BCBSFL
+scp dxref_2015.csv apsrd9425:~/BCBSMN
+scp flusps.txt apsrd9425:~/BCBSLA
+scp POS_lookup.txt apsrd9425:~/anthem
+scp ccs_dx_icd10cm_2019_1.csv apsrd9425:~/healthfirst
+
+scp UHG_NDC_Units.txt apsrd9425:~/BCBSMI
+
+DSW servicenow
+http://webrp2061.uhc.com/?page_id=2032
+
+
+copy from linux to local box desktop
+Open git application
+
+
+
+scp dless1@apsrd9425:/home/dless1/healthnet/racer_scehma.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/anthem/CCS_import.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/anthem/xgboost/XGBoost_model_R_1526485069712_935  ~/Desktop
+scp dless1@apsrd9425:/home/dless1/aetna/ensemble/ensemble_binomial ~/Desktop
+scp dless1@apsrd9425:/home/dless1/aetna/CCS_import.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/cigna/table_listing_RACER00195.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/memberlist.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/plotDatKam.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/excellus/Excellus_model_production_code.R ~/Desktop
+scp dless1@apsrd9425:/home/dless1/aetna/traditional_Gower_scoresc_1_31.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/aetna/claim_examplec_1_31.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/centene/outlier_detail_5_13.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/centene/outlier_5_13.csv ~/Desktop
+
+
+
+cd /projects
+cd excellus
+
+copy from local box to server
+open git and go to local directory
+from latop to server
+scp Kccs_dx_icd10cm_2019_1.csv dless1@apsrd9425:/home/dless1/BCBSMI
+scp NYU_ED_wts.txt apsrd9425:/home/dless1/BCBSFL
+scp ccs_dx_icd10cm_2019_1.csv  dless1@apsrd9425:/home/dless1/healthfirst
+scp CMS_Jcode_max_units.txt dless1@apsrd9425:/home/dless1/healthfirst
+scp NDC_TC.txt dless1@apsrd9425:/home/dless1/healthfirst
+scp NDC_HCPC3.txt dless1@apsrd9425:/home/dless1/healthfirst
+scp CCSROLLUP.txt dless1@apsrd9425:/home/dless1/healthfirst
+scp sept_reviewed.txt dless1@apsrd9425:/home/dless1/molina
+scp CMS_Jcode_max_units.txt dless1@apsrd9425:/home/dless1/BCBSMI
+scp betos20.txt dless1@apsrd9425:/home/dless1/HIPNY
+scp claim_no_hits.txt dless1@apsrd9425:/home/dless1/molina
+scp NDC_MUE_POC.txt dless1@apsrd9425:/home/dless1/BCBSMI
+scp test4_from_view.txt dless1@apsrd9425:/home/dless1/BCBSMI
+scp amy_reviewed_list_2_3.txt dless1@apsrd9425:/home/dless1/healthfirst
+
+open git bash
+from server to H drive
+
+scp dless1@apsrd9425:/home/dless1/BCBSLA/*.R /H/My_Doccuments
+
+scp dless1@apsrd9425:/home/dless1/hipny/claims_to_investigate_hipny195.csv /H/My_Doccuments
+scp dless1@apsrd9425:/home/dless1/hipny/high_bucs_hipny195.csv /H/My_Doccuments
+
+cp /home/dless1/hipny/ccs_dx_icd10cm_2019_1.csv /home/dless1/BCBSFL
+cp /home/dless1/aetna/aetna_play_file.csv /users/elinvill
+
+cp /home/dless1/anthem/Anthem_ESRD_scores_1c.R /projects/anthem/code
+cp /home/dless1/anthem/xgboost/XGBoost_model_R_1526485069712_935 /projects/anthem/data
+cp /home/dless1/anthem/ccs_dx_icd10cm_2018_1.csv /projects/anthem/data
+cp /home/dless1/anthem/pc_icd10pcs_2018.csv /projects/anthem/data
+cp /home/dless1/anthem/CCS_import.csv /projects/anthem/data
+cp /home/dless1/anthem/Anthem_ESRD_scores_1c.R /projects/anthem/code
+cp /home/dless1/anthem/claims_to_investigate.csv /projects/anthem/data
+
+
+cp /home/dless1/anthem/Anthem_ESRD_scores_1d.R /projects/anthem/code
+cp /home/dless1/anthem/xgboost/XGBoost_model_R_1529514384938_1 /projects/anthem/data
+cp /home/dless1/anthem/claims_to_investigate.csv /projects/anthem/data
+
+
+
+cp /home/dless1/aetna/aetna_ESRD_scores_1c.R /projects/aetna/code
+cp /home/dless1/aetna/ensemble/ensemble_binomial /projects/aetna/data
+cp /home/dless1/aetna/pc_icd10pcs_2018.csv /projects/aetna/data
+cp /home/dless1/aetna/CCS_import.csv /projects/aetna/data
+
+
+cp /home/dless1/aetna/aetna_ESRD_scores_1a.R /projects/aetna/code
+cp /home/dless1/aetna/claims_to_investigate.csv /projects/aetna/data
+
+
+scp dless1@apsrd9425:/home/dless1/cigna/table_listing_RACER00195.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/number_clusters.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/C5a.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/CCS_app1.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/proc1b_app1.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/proc1b_app.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/CCS_app.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/C5_by_cluster.txt ~/Desktop
+scp dless1@apsrd9425:/home/dless1/centene/very_sick_Negative_Validation.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/cigna/"C5_by_cluster_outpt_full.txt ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/Primary_Anomaly_Field.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/Top_10_Anomaly_Field_List.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/base_data.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/Top_10_Anomaly_Field_List_50K.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/cigna/Primary_Anomaly_Field_50k.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/aetna/matches100_7_5.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/healthfirst/healthfirst_JCode_2D_cluster4.R ~/Desktop
+scp dless1@apsrd9425:/home/dless1/kaiser/P4COB_Kaiser_dupe_prod3E.R  ~/Desktop
+scp dless1@apsrd9425:/home/dless1/molina/xgboost/XGBoost_model_R_1629222360940_6970  ~/Desktop
+
+
+scp dless1@apsrd9425:/home/dless1/excellus/elixhauser_scores_line.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/lines_spike.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/elixhauser_scores_modifiers.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/modifiers_spike.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/elixhauser_scores_bill.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/billed_spike.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/elixhauser_scores_bill_tot.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/excellus/tot_billed_spike.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/anthem/anomaly_model_4_23.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/anthem/procedure_detail_4_23.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/anthem/icd_detail_4_23.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/aetna/match_counts.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/aetna/one_line_per_pair.csv ~/Desktop
+
+scp dless1@apsrd9425:/home/dless1/aetna/possible_dupes_4_26.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/aetna/claims_4_26.csv ~/Desktop
+scp dless1@apsrd9425:/home/dless1/molina/fips_test.Rda ~/Desktop
+C:\Users\dless1\OneDrive - UHG\Homedir\My_Doccuments\molina
+
+scp dless1@apsrd9425:/home/dless1/molina/molina_COCO_3A_leakage_prod_githubV2.R ~/Desktop
+
+
+
+
+
+
+
+scp dless1@apsrd9425:/home/dless1/aetna/rf_2/DRF_model_R_1622552033392_261 /mapr/data/cds/post/COB/postpayCobDSPrioritizationModel/Aetna/postpayCobDSPrioritizationModel/data
+scp dless1@apsrd9425:/home/dless1/aetna/ccs_dx_icd10cm_2019_1.csv /mapr/data/cds/post/COB/postpayCobDSPrioritizationModel/Aetna/postpayCobDSPrioritizationModel/data
+
+scp dless1@apsrd9425:/home/dless1/aetna/rf/DRF_model_R_1628587000646_1432 /mapr/data/cds/post/COB/postpayCobDSPrioritizationModel/Aetna/postpayCobDSPrioritizationModel/data
+
+chmod 775 DRF_model_R_1628587000646_1432
+
+
+grant permission
+
+chmod 775 ccs_dx_icd10cm_2019_1.csv
+chmod 775 DRF_model_R_1622552033392_261
+
+SPYDER startup
+Xwinserver start
+putty 9425
+log in
+spyder
+
+
+
+? possible for neo4j
+apsrd9425.uhc.com:7474
+or
+apsrd9425.uhc.com:7474/browser
+
+
+gephi
+
+Xwinserver start
+putty 9425
+
+cd ..
+cd ..
+cd app
+
+$ cd gephi-0.9.2
+dless1@apsrd9425:/app/gephi-0.9.2
+$ ./bin/gephi
+
+anaconda install folder
+C:\Users\dless1\AppData\Local\Continuum\anaconda3
+
+Users\dless1\AppData\Local\Continuum\anaconda3
+
+
+to kill a job
+go to putty
+ps aux | grep dless1
+
+
+
+
+
+to kill it for example job 62449
+kill -9 62449
+
+
+rally
+Rally URL: https://rally1.rallydev.com/ 
+Username: dale.less@optum.com
+Password: Password1
+
+
+jupyter hub for R  notebooks
+https://apsrd9425.uhc.com:8000/user/dless1/tree
+
+
+
+946
+BCCA
+DBSWP0624.AIMHEALTH.COM
+DMFEED00946
+
+
+RACER00946
+
+
+ANACONDA make an environment
+use putty
+cd .conda
+cd envs
+conda create -n evironmentname -- clone basepytorch
+
+
+activate conda environment
+conda activate tensorflow2
+
+to have enironment in jupyter notebook
+
+conda install -c anaconda ipykernal
+
+to show up tensrflow2 in notebook
+python -m ipykernal install --user --name=tensorflow2
+
+
+
+HR
+Call this # 1-800-561-0861
+
+
+teams
+
+  	Name: 	  	Less, Dale A 
+  	Account: 	  	dale.less@optum.com 
+
+  	Conference phone number: 	  	+1 (952) 222-7450 
+  	Audio Conferencing PIN: 	  	34448 
+
+
+
+
+
+linux commands
+
+sort by size 
+ls -lS
+ls -l --block-size=M
+ls -lS --block-size=M
+
+
+find files > 100 meg
+find . -size +100M -ls
+rm to delete
+
+
+list csv
+find . -name "*.csv" -type f
+
+delete csv files
+find . -name "*.csv" -type f -delete
+
+search within files
+go to subdirectory
+search for iForest
+
+grep -inr "iforest"
+
+
+
+
+R output not displaying
+
+sink()
+
+
+list of tables in database
+
+funk<- sqlTables(
+  conn  )
+
+field list
+MedicareCoverage<- sqlColumns(
+  conn, "dbo.MedicareCoverage"  )
+
+",
+  max = 100
+
+AuditPoint
+ https://bcbsm.t3worldwide.com/#/login 
+dless
+Valdese2
+souse meet nitro
+3rd grade woodland
+childhood freind ben davis
+
